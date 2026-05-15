@@ -96,6 +96,24 @@ async function processPrint(rawBody) {
   }
 }
 
+app.get('/logs', (req, res) => {
+  if (!fs.existsSync(LOG_FILE)) {
+    return res.send('No logs yet');
+  }
+
+  const logs = fs.readFileSync(LOG_FILE, 'utf8');
+  res.type('text/plain').send(logs);
+});
+
+app.get('/printed', (req, res) => {
+  if (!fs.existsSync(PRINTED_FILE)) {
+    return res.send('No printed invoices yet');
+  }
+
+  const printed = fs.readFileSync(PRINTED_FILE, 'utf8');
+  res.type('text/plain').send(printed);
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
