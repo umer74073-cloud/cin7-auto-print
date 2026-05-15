@@ -17,6 +17,10 @@ app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.post('/webhook/cin7', (req, res) => {
   console.log('Webhook received');
   res.status(200).send('OK');
