@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
+const fs = require('fs');
 
 const app = express();
 app.use(express.text({ type: '*/*', limit: '20mb' }));
@@ -9,33 +10,57 @@ const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
 const PRINTNODE_PRINTER_ID = Number(process.env.PRINTNODE_PRINTER_ID);
 
+const LOG_FILE = 'print-log.txt';
+const PRINTED_FILE = 'printed-invoices.txt';
+
 app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
 
 app.post('/webhook/cin7', (req, res) => {
   console.log('Webhook received');
-
-  // reply fast to Cin7
   res.status(200).send('OK');
-
-  // process in background
   processPrint(req.body);
 });
+
+function writeLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  console.log(line.trim());
+  fs.appendFileSync(LOG_FILE, line);
+}
+
+function hasPrinted(invoiceNumber) {
+  if (!fs.existsSync(PRINTED_FILE)) return false;
+
+  const content = fs.readFileSync(PRINTED_FILE, 'utf8');
+  const printedList = content.split('\n').map(x => x.trim()).filter(Boolean);
+
+  return printedList.includes(invoiceNumber);
+}
+
+function markPrinted(invoiceNumber) {
+  fs.appendFileSync(PRINTED_FILE, invoiceNumber + '\n');
+}
 
 async function processPrint(rawBody) {
   try {
     const body = JSON.parse(rawBody);
 
+    const invoiceNumber = body.InvoiceNumber || 'Unknown-Invoice';
     const downloadLink = body.DownloadLink;
-    const invoiceNumber = body.InvoiceNumber || 'Invoice';
 
     if (!downloadLink) {
-      console.log('ERROR: DownloadLink not found');
+      writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
       return;
     }
 
-    console.log('Downloading PDF...');
+    if (hasPrinted(invoiceNumber)) {
+      writeLog(`SKIPPED DUPLICATE | ${invoiceNumber}`);
+      return;
+    }
+
+    writeLog(`START PRINT | ${invoiceNumber}`);
+
     const pdfResponse = await axios.get(downloadLink, {
       responseType: 'arraybuffer',
       timeout: 30000
@@ -43,7 +68,6 @@ async function processPrint(rawBody) {
 
     const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
 
-    console.log('Sending to PrintNode...');
     const printResponse = await axios.post(
       'https://api.printnode.com/printjobs',
       {
@@ -65,10 +89,10 @@ async function processPrint(rawBody) {
       }
     );
 
-    console.log('✅ PrintNode success:', printResponse.data);
+    markPrinted(invoiceNumber);
+    writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
   } catch (error) {
-    console.log('❌ PRINT ERROR:');
-    console.log(error.response?.data || error.message);
+    writeLog(`PRINT FAILED | ${error.response?.data || error.message}`);
   }
 }
 
