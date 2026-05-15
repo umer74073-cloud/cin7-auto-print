@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
+const { Pool } = require('pg');
 
 const app = express();
 app.use(express.text({ type: '*/*', limit: '20mb' }));
@@ -10,19 +10,27 @@ const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
 const PRINTNODE_PRINTER_ID = Number(process.env.PRINTNODE_PRINTER_ID);
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
-
-const LOG_FILE = 'print-log.txt';
-const PRINTED_FILE = 'printed-invoices.txt';
+const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
 
-app.get('/health', (req, res) => {
-  res.status(200).send('OK');
+app.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).send('OK');
+  } catch (error) {
+    res.status(500).send('DB ERROR');
+  }
 });
 
 app.post('/webhook/cin7', (req, res) => {
@@ -33,28 +41,56 @@ app.post('/webhook/cin7', (req, res) => {
     return res.status(401).send('Unauthorized');
   }
 
-  console.log('Webhook received');
   res.status(200).send('OK');
   processPrint(req.body);
 });
 
-function writeLog(message) {
-  const line = `[${new Date().toISOString()}] ${message}\n`;
-  console.log(line.trim());
-  fs.appendFileSync(LOG_FILE, line);
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS print_logs (
+      id SERIAL PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT NOW(),
+      message TEXT NOT NULL
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS printed_invoices (
+      id SERIAL PRIMARY KEY,
+      invoice_number TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 
-function hasPrinted(invoiceNumber) {
-  if (!fs.existsSync(PRINTED_FILE)) return false;
+async function writeLog(message) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
 
-  const content = fs.readFileSync(PRINTED_FILE, 'utf8');
-  const printedList = content.split('\n').map(x => x.trim()).filter(Boolean);
-
-  return printedList.includes(invoiceNumber);
+  try {
+    await pool.query(
+      'INSERT INTO print_logs (message) VALUES ($1)',
+      [line]
+    );
+  } catch (error) {
+    console.log('LOG DB ERROR:', error.message);
+  }
 }
 
-function markPrinted(invoiceNumber) {
-  fs.appendFileSync(PRINTED_FILE, invoiceNumber + '\n');
+async function hasPrinted(invoiceNumber) {
+  const result = await pool.query(
+    'SELECT 1 FROM printed_invoices WHERE invoice_number = $1 LIMIT 1',
+    [invoiceNumber]
+  );
+
+  return result.rows.length > 0;
+}
+
+async function markPrinted(invoiceNumber) {
+  await pool.query(
+    'INSERT INTO printed_invoices (invoice_number) VALUES ($1) ON CONFLICT (invoice_number) DO NOTHING',
+    [invoiceNumber]
+  );
 }
 
 function sleep(ms) {
@@ -92,16 +128,16 @@ async function processPrint(rawBody) {
     const downloadLink = body.DownloadLink;
 
     if (!downloadLink) {
-      writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
+      await writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
       return;
     }
 
-    if (hasPrinted(invoiceNumber)) {
-      writeLog(`SKIPPED DUPLICATE | ${invoiceNumber}`);
+    if (await hasPrinted(invoiceNumber)) {
+      await writeLog(`SKIPPED DUPLICATE | ${invoiceNumber}`);
       return;
     }
 
-    writeLog(`START PRINT | ${invoiceNumber}`);
+    await writeLog(`START PRINT | ${invoiceNumber}`);
 
     const pdfResponse = await axios.get(downloadLink, {
       responseType: 'arraybuffer',
@@ -112,47 +148,63 @@ async function processPrint(rawBody) {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
+        await writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
 
         const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64);
 
-        markPrinted(invoiceNumber);
-        writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
+        await markPrinted(invoiceNumber);
+        await writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
         return;
       } catch (error) {
-        writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${invoiceNumber} | ${error.response?.data || error.message}`);
+        await writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${invoiceNumber} | ${error.response?.data || error.message}`);
 
         if (attempt < MAX_RETRIES) {
-          writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${invoiceNumber}`);
+          await writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${invoiceNumber}`);
           await sleep(RETRY_DELAY_MS);
         } else {
-          writeLog(`PRINT FAILED FINAL | ${invoiceNumber}`);
+          await writeLog(`PRINT FAILED FINAL | ${invoiceNumber}`);
         }
       }
     }
   } catch (error) {
-    writeLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
+    await writeLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
   }
 }
 
-app.get('/logs', (req, res) => {
-  if (!fs.existsSync(LOG_FILE)) {
-    return res.send('No logs yet');
+app.get('/logs', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT created_at, message FROM print_logs ORDER BY id DESC LIMIT 200'
+    );
+
+    const text = result.rows.map(r => r.message).join('\n');
+    res.type('text/plain').send(text || 'No logs yet');
+  } catch (error) {
+    res.status(500).send('Log read failed');
   }
-
-  const logs = fs.readFileSync(LOG_FILE, 'utf8');
-  res.type('text/plain').send(logs);
 });
 
-app.get('/printed', (req, res) => {
-  if (!fs.existsSync(PRINTED_FILE)) {
-    return res.send('No printed invoices yet');
+app.get('/printed', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT invoice_number FROM printed_invoices ORDER BY id DESC LIMIT 200'
+    );
+
+    const text = result.rows.map(r => r.invoice_number).join('\n');
+    res.type('text/plain').send(text || 'No printed invoices yet');
+  } catch (error) {
+    res.status(500).send('Printed read failed');
   }
-
-  const printed = fs.readFileSync(PRINTED_FILE, 'utf8');
-  res.type('text/plain').send(printed);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('DB INIT FAILED:', error.message);
+    process.exit(1);
+  });
+``
