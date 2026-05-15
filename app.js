@@ -14,6 +14,9 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const LOG_FILE = 'print-log.txt';
 const PRINTED_FILE = 'printed-invoices.txt';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 10000;
+
 app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
@@ -54,6 +57,33 @@ function markPrinted(invoiceNumber) {
   fs.appendFileSync(PRINTED_FILE, invoiceNumber + '\n');
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function sendToPrintNode(invoiceNumber, pdfBase64) {
+  return axios.post(
+    'https://api.printnode.com/printjobs',
+    {
+      printerId: PRINTNODE_PRINTER_ID,
+      title: `Cin7 Invoice ${invoiceNumber}`,
+      contentType: 'pdf_base64',
+      content: pdfBase64,
+      source: 'Cin7 Auto Print'
+    },
+    {
+      auth: {
+        username: PRINTNODE_API_KEY,
+        password: ''
+      },
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000
+    }
+  );
+}
+
 async function processPrint(rawBody) {
   try {
     const body = JSON.parse(rawBody);
@@ -80,31 +110,28 @@ async function processPrint(rawBody) {
 
     const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
 
-    const printResponse = await axios.post(
-      'https://api.printnode.com/printjobs',
-      {
-        printerId: PRINTNODE_PRINTER_ID,
-        title: `Cin7 Invoice ${invoiceNumber}`,
-        contentType: 'pdf_base64',
-        content: pdfBase64,
-        source: 'Cin7 Auto Print'
-      },
-      {
-        auth: {
-          username: PRINTNODE_API_KEY,
-          password: ''
-        },
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
 
-    markPrinted(invoiceNumber);
-    writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
+        const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64);
+
+        markPrinted(invoiceNumber);
+        writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
+        return;
+      } catch (error) {
+        writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${invoiceNumber} | ${error.response?.data || error.message}`);
+
+        if (attempt < MAX_RETRIES) {
+          writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${invoiceNumber}`);
+          await sleep(RETRY_DELAY_MS);
+        } else {
+          writeLog(`PRINT FAILED FINAL | ${invoiceNumber}`);
+        }
+      }
+    }
   } catch (error) {
-    writeLog(`PRINT FAILED | ${error.response?.data || error.message}`);
+    writeLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
   }
 }
 
