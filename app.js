@@ -33,6 +33,24 @@ app.get('/health', async (req, res) => {
   }
 });
 
+app.get('/status', async (req, res) => {
+  try {
+    const printedResult = await pool.query('SELECT COUNT(*) AS count FROM printed_invoices');
+    const logsResult = await pool.query('SELECT COUNT(*) AS count FROM print_logs');
+
+    res.json({
+      ok: true,
+      printedInvoices: Number(printedResult.rows[0].count),
+      logRows: Number(logsResult.rows[0].count)
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 app.post('/webhook/cin7', (req, res) => {
   const providedSecret = req.query.secret;
 
@@ -207,4 +225,3 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
-``
