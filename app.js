@@ -9,6 +9,7 @@ app.use(express.text({ type: '*/*', limit: '20mb' }));
 const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
 const PRINTNODE_PRINTER_ID = Number(process.env.PRINTNODE_PRINTER_ID);
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 const LOG_FILE = 'print-log.txt';
 const PRINTED_FILE = 'printed-invoices.txt';
@@ -22,6 +23,13 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/webhook/cin7', (req, res) => {
+  const providedSecret = req.query.secret;
+
+  if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
+    writeLog('UNAUTHORIZED WEBHOOK ATTEMPT');
+    return res.status(401).send('Unauthorized');
+  }
+
   console.log('Webhook received');
   res.status(200).send('OK');
   processPrint(req.body);
