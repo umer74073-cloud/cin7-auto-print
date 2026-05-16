@@ -8,12 +8,17 @@ app.use(express.text({ type: '*/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
-const PRINTNODE_PRINTER_ID = Number(process.env.PRINTNODE_PRINTER_ID);
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
+
+// Simple printer mapping by location name from Cin7
+const PRINTER_MAP = {
+  "Main Warehouse": 75444320,
+  "Default": 75444320
+};
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -115,11 +120,19 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function sendToPrintNode(invoiceNumber, pdfBase64) {
+function getPrinterId(locationName) {
+  if (locationName && PRINTER_MAP[locationName]) {
+    return PRINTER_MAP[locationName];
+  }
+
+  return PRINTER_MAP["Default"];
+}
+
+async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
   return axios.post(
     'https://api.printnode.com/printjobs',
     {
-      printerId: PRINTNODE_PRINTER_ID,
+      printerId: printerId,
       title: `Cin7 Invoice ${invoiceNumber}`,
       contentType: 'pdf_base64',
       content: pdfBase64,
@@ -144,6 +157,8 @@ async function processPrint(rawBody) {
 
     const invoiceNumber = body.InvoiceNumber || 'Unknown-Invoice';
     const downloadLink = body.DownloadLink;
+    const locationName = body.Location || body.LocationName || 'Default';
+    const printerId = getPrinterId(locationName);
 
     if (!downloadLink) {
       await writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
@@ -155,7 +170,7 @@ async function processPrint(rawBody) {
       return;
     }
 
-    await writeLog(`START PRINT | ${invoiceNumber}`);
+    await writeLog(`START PRINT | ${invoiceNumber} | Location: ${locationName} | Printer: ${printerId}`);
 
     const pdfResponse = await axios.get(downloadLink, {
       responseType: 'arraybuffer',
@@ -168,7 +183,7 @@ async function processPrint(rawBody) {
       try {
         await writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
 
-        const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64);
+        const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64, printerId);
 
         await markPrinted(invoiceNumber);
         await writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
