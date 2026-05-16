@@ -14,7 +14,13 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
 
-// Simple printer mapping by location name from Cin7
+/*
+  EASY PRINTER MAPPING
+  Add new locations here like this:
+
+  "Vienna Warehouse": 12345678,
+  "Berlin Warehouse": 87654321
+*/
 const PRINTER_MAP = {
   "Main Warehouse": 75444320,
   "Default": 75444320
@@ -46,7 +52,8 @@ app.get('/status', async (req, res) => {
     res.json({
       ok: true,
       printedInvoices: Number(printedResult.rows[0].count),
-      logRows: Number(logsResult.rows[0].count)
+      logRows: Number(logsResult.rows[0].count),
+      printerMappings: PRINTER_MAP
     });
   } catch (error) {
     res.status(500).json({
@@ -240,3 +247,4 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
+``
