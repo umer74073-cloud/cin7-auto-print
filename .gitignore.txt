@@ -1,4 +1,0 @@
-node_modules
-.env
-print-log.txt
-printed-invoices.txt
