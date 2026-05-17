@@ -8,22 +8,25 @@ app.use(express.text({ type: '*/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
 
 /*
-  EASY PRINTER MAPPING
-  Add new locations here like this:
-
-  "Vienna Warehouse": 12345678,
-  "Berlin Warehouse": 87654321
+  MULTI-CLIENT CONFIG
+  Add each client here with:
+  - secret
+  - printer mapping
 */
-const PRINTER_MAP = {
-  "Main Warehouse": 75444320,
-  "Default": 75444320
+const CLIENTS = {
+  clientA: {
+    secret: 'Nexvista',
+    printers: {
+      "Main Warehouse": 75444320,
+      "Default": 75444320
+    }
+  }
 };
 
 const pool = new Pool({
@@ -53,7 +56,7 @@ app.get('/status', async (req, res) => {
       ok: true,
       printedInvoices: Number(printedResult.rows[0].count),
       logRows: Number(logsResult.rows[0].count),
-      printerMappings: PRINTER_MAP
+      clients: Object.keys(CLIENTS)
     });
   } catch (error) {
     res.status(500).json({
@@ -65,15 +68,25 @@ app.get('/status', async (req, res) => {
 
 app.post('/webhook/cin7', (req, res) => {
   const providedSecret = req.query.secret;
+  const clientKey = getClientBySecret(providedSecret);
 
-  if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
+  if (!clientKey) {
     writeLog('UNAUTHORIZED WEBHOOK ATTEMPT');
     return res.status(401).send('Unauthorized');
   }
 
   res.status(200).send('OK');
-  processPrint(req.body);
+  processPrint(req.body, clientKey);
 });
+
+function getClientBySecret(secret) {
+  for (const clientKey of Object.keys(CLIENTS)) {
+    if (CLIENTS[clientKey].secret === secret) {
+      return clientKey;
+    }
+  }
+  return null;
+}
 
 async function initDb() {
   await pool.query(`
@@ -127,12 +140,14 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function getPrinterId(locationName) {
-  if (locationName && PRINTER_MAP[locationName]) {
-    return PRINTER_MAP[locationName];
+function getPrinterId(clientKey, locationName) {
+  const printers = CLIENTS[clientKey].printers;
+
+  if (locationName && printers[locationName]) {
+    return printers[locationName];
   }
 
-  return PRINTER_MAP["Default"];
+  return printers["Default"];
 }
 
 async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
@@ -158,26 +173,26 @@ async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
   );
 }
 
-async function processPrint(rawBody) {
+async function processPrint(rawBody, clientKey) {
   try {
     const body = JSON.parse(rawBody);
 
     const invoiceNumber = body.InvoiceNumber || 'Unknown-Invoice';
     const downloadLink = body.DownloadLink;
     const locationName = body.Location || body.LocationName || 'Default';
-    const printerId = getPrinterId(locationName);
+    const printerId = getPrinterId(clientKey, locationName);
 
     if (!downloadLink) {
-      await writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
+      await writeLog(`ERROR | ${clientKey} | ${invoiceNumber} | DownloadLink missing`);
       return;
     }
 
     if (await hasPrinted(invoiceNumber)) {
-      await writeLog(`SKIPPED DUPLICATE | ${invoiceNumber}`);
+      await writeLog(`SKIPPED DUPLICATE | ${clientKey} | ${invoiceNumber}`);
       return;
     }
 
-    await writeLog(`START PRINT | ${invoiceNumber} | Location: ${locationName} | Printer: ${printerId}`);
+    await writeLog(`START PRINT | ${clientKey} | ${invoiceNumber} | Location: ${locationName} | Printer: ${printerId}`);
 
     const pdfResponse = await axios.get(downloadLink, {
       responseType: 'arraybuffer',
@@ -188,26 +203,26 @@ async function processPrint(rawBody) {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        await writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
+        await writeLog(`PRINT ATTEMPT ${attempt} | ${clientKey} | ${invoiceNumber}`);
 
         const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64, printerId);
 
         await markPrinted(invoiceNumber);
-        await writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
+        await writeLog(`PRINT SUCCESS | ${clientKey} | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
         return;
       } catch (error) {
-        await writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${invoiceNumber} | ${error.response?.data || error.message}`);
+        await writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${clientKey} | ${invoiceNumber} | ${error.response?.data || error.message}`);
 
         if (attempt < MAX_RETRIES) {
-          await writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${invoiceNumber}`);
+          await writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${clientKey} | ${invoiceNumber}`);
           await sleep(RETRY_DELAY_MS);
         } else {
-          await writeLog(`PRINT FAILED FINAL | ${invoiceNumber}`);
+          await writeLog(`PRINT FAILED FINAL | ${clientKey} | ${invoiceNumber}`);
         }
       }
     }
   } catch (error) {
-    await writeLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
+    await writeLog(`PROCESS FAILED | ${clientKey} | ${error.response?.data || error.message}`);
   }
 }
 
@@ -247,4 +262,3 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
-``
