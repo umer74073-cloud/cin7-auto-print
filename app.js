@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { Pool } = require('pg');
+const path = require('path');
 
 const app = express();
 app.use(express.text({ type: '*/*', limit: '20mb' }));
@@ -15,11 +16,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
 
 /*
-  EASY PRINTER MAPPING
-  Add new locations here like this:
-
-  "Vienna Warehouse": 12345678,
-  "Berlin Warehouse": 87654321
+  CURRENT LIVE LOGIC STILL USES THIS HARDCODED MAPPING
 */
 const PRINTER_MAP = {
   "Main Warehouse": 75444320,
@@ -35,6 +32,13 @@ app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
 
+/*
+  SERVE FIRST ONBOARDING PAGE
+*/
+app.get('/onboarding', (req, res) => {
+  res.sendFile(path.join(__dirname, 'onboarding-page.html'));
+});
+
 app.get('/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -48,15 +52,64 @@ app.get('/status', async (req, res) => {
   try {
     const printedResult = await pool.query('SELECT COUNT(*) AS count FROM printed_invoices');
     const logsResult = await pool.query('SELECT COUNT(*) AS count FROM print_logs');
+    const clientsResult = await pool.query('SELECT COUNT(*) AS count FROM clients');
 
     res.json({
       ok: true,
       printedInvoices: Number(printedResult.rows[0].count),
       logRows: Number(logsResult.rows[0].count),
+      clientsCount: Number(clientsResult.rows[0].count),
       printerMappings: PRINTER_MAP
     });
   } catch (error) {
     res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
+  ONE-TIME SEED ROUTE
+  CURRENTLY KEPT AS-IS
+*/
+app.get('/seed-first-client', async (req, res) => {
+  try {
+    const master = req.query.master;
+
+    if (!WEBHOOK_SECRET || master !== WEBHOOK_SECRET) {
+      return res.status(401).send('Unauthorized');
+    }
+
+    const existing = await pool.query(
+      'SELECT id, name, webhook_secret FROM clients WHERE webhook_secret = $1 LIMIT 1',
+      ['Nexvista']
+    );
+
+    if (existing.rows.length > 0) {
+      return res.json({
+        ok: true,
+        message: 'Client already exists',
+        client: existing.rows[0]
+      });
+    }
+
+    const inserted = await pool.query(
+      `
+      INSERT INTO clients (name, webhook_secret, printnode_api_key, is_active)
+      VALUES ($1, $2, $3, TRUE)
+      RETURNING id, name, webhook_secret
+      `,
+      ['Client A', 'Nexvista', PRINTNODE_API_KEY]
+    );
+
+    return res.json({
+      ok: true,
+      message: 'First client inserted successfully',
+      client: inserted.rows[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
       ok: false,
       error: error.message
     });
@@ -76,7 +129,7 @@ app.post('/webhook/cin7', (req, res) => {
 });
 
 async function initDb() {
-  // CURRENT LIVE TABLES (keep these for current working app)
+  // CURRENT LIVE TABLES
   await pool.query(`
     CREATE TABLE IF NOT EXISTS print_logs (
       id SERIAL PRIMARY KEY,
@@ -93,7 +146,7 @@ async function initDb() {
     )
   `);
 
-  // NEW MULTI-CLIENT TABLES (for next phase)
+  // NEW MULTI-CLIENT TABLES
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clients (
       id SERIAL PRIMARY KEY,
