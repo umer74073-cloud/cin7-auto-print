@@ -62,43 +62,43 @@
     </div>
 
     <div class="row">
-      <input type="text" placeholder="Printer 1" />
-      <input type="number" placeholder="75444320" />
-      <select><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
-      <select><option>Yes</option><option>No</option></select>
-      <select><option>Yes</option><option>No</option></select>
+      <input class="printer-name" type="text" placeholder="Printer 1" />
+      <input class="printer-id" type="number" placeholder="75444320" />
+      <select class="printer-priority"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+      <select class="printer-default"><option value="true">Yes</option><option value="false">No</option></select>
+      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
     </div>
 
     <div class="row">
-      <input type="text" placeholder="Printer 2" />
-      <input type="number" placeholder="Printer ID" />
-      <select><option>2</option><option>1</option><option>3</option><option>4</option><option>5</option></select>
-      <select><option>No</option><option>Yes</option></select>
-      <select><option>Yes</option><option>No</option></select>
+      <input class="printer-name" type="text" placeholder="Printer 2" />
+      <input class="printer-id" type="number" placeholder="Printer ID" />
+      <select class="printer-priority"><option>2</option><option>1</option><option>3</option><option>4</option><option>5</option></select>
+      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
+      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
     </div>
 
     <div class="row">
-      <input type="text" placeholder="Printer 3" />
-      <input type="number" placeholder="Printer ID" />
-      <select><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select>
-      <select><option>No</option><option>Yes</option></select>
-      <select><option>Yes</option><option>No</option></select>
+      <input class="printer-name" type="text" placeholder="Printer 3" />
+      <input class="printer-id" type="number" placeholder="Printer ID" />
+      <select class="printer-priority"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select>
+      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
+      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
     </div>
 
     <div class="row">
-      <input type="text" placeholder="Printer 4" />
-      <input type="number" placeholder="Printer ID" />
-      <select><option>4</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
-      <select><option>No</option><option>Yes</option></select>
-      <select><option>Yes</option><option>No</option></select>
+      <input class="printer-name" type="text" placeholder="Printer 4" />
+      <input class="printer-id" type="number" placeholder="Printer ID" />
+      <select class="printer-priority"><option>4</option><option>1</option><option>2</option><option>3</option><option>5</option></select>
+      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
+      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
     </div>
 
     <div class="row">
-      <input type="text" placeholder="Printer 5" />
-      <input type="number" placeholder="Printer ID" />
-      <select><option>5</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
-      <select><option>No</option><option>Yes</option></select>
-      <select><option>Yes</option><option>No</option></select>
+      <input class="printer-name" type="text" placeholder="Printer 5" />
+      <input class="printer-id" type="number" placeholder="Printer ID" />
+      <select class="printer-priority"><option>5</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
+      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
     </div>
 
     <div class="buttons">
@@ -109,11 +109,40 @@
     <div id="messageBox" class="message"></div>
 
     <div class="note">
-      This step saves only client details. Printers are still layout only for now.
+      This step saves client details and printers together.
     </div>
   </div>
 
   <script>
+    function collectPrinters() {
+      const names = document.querySelectorAll('.printer-name');
+      const ids = document.querySelectorAll('.printer-id');
+      const priorities = document.querySelectorAll('.printer-priority');
+      const defaults = document.querySelectorAll('.printer-default');
+      const actives = document.querySelectorAll('.printer-active');
+
+      const printers = [];
+
+      for (let i = 0; i < names.length; i++) {
+        const printerIdValue = ids[i].value.trim();
+        const printerNameValue = names[i].value.trim();
+
+        if (!printerIdValue) {
+          continue;
+        }
+
+        printers.push({
+          printer_id: Number(printerIdValue),
+          printer_name: printerNameValue,
+          priority_order: Number(priorities[i].value),
+          is_default: defaults[i].value === 'true',
+          is_active: actives[i].value === 'true'
+        });
+      }
+
+      return printers;
+    }
+
     async function saveClient() {
       const payload = {
         name: document.getElementById('clientName').value.trim(),
@@ -122,10 +151,11 @@
         is_active: document.getElementById('isActive').value === 'true'
       };
 
+      const printers = collectPrinters();
       const box = document.getElementById('messageBox');
 
       try {
-        const response = await fetch('/admin/clients', {
+        const clientResponse = await fetch('/admin/clients', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -133,17 +163,37 @@
           body: JSON.stringify(payload)
         });
 
-        const result = await response.json();
+        const clientResult = await clientResponse.json();
 
-        if (result.ok) {
-          box.className = 'message success';
-          box.style.display = 'block';
-          box.textContent = result.message;
-        } else {
+        if (!clientResult.ok) {
           box.className = 'message error';
           box.style.display = 'block';
-          box.textContent = result.error || 'Save failed';
+          box.textContent = clientResult.error || 'Client save failed';
+          return;
         }
+
+        const clientId = clientResult.client.id;
+
+        const printersResponse = await fetch(`/admin/clients/${clientId}/printers`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ printers })
+        });
+
+        const printersResult = await printersResponse.json();
+
+        if (!printersResult.ok) {
+          box.className = 'message error';
+          box.style.display = 'block';
+          box.textContent = printersResult.error || 'Printers save failed';
+          return;
+        }
+
+        box.className = 'message success';
+        box.style.display = 'block';
+        box.textContent = 'Client and printers saved successfully';
       } catch (error) {
         box.className = 'message error';
         box.style.display = 'block';
@@ -156,6 +206,10 @@
       document.getElementById('webhookSecret').value = '';
       document.getElementById('printnodeApiKey').value = '';
       document.getElementById('isActive').value = 'true';
+
+      document.querySelectorAll('.printer-name').forEach(x => x.value = '');
+      document.querySelectorAll('.printer-id').forEach(x => x.value = '');
+
       document.getElementById('messageBox').style.display = 'none';
     }
   </script>
