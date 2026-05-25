@@ -5,7 +5,8 @@ const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
-app.use(express.text({ type: '*/*', limit: '20mb' }));
+app.use(express.json());
+app.use(express.text({ type: 'text/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
 const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
@@ -63,6 +64,67 @@ app.get('/status', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
+  SAVE CLIENT ROUTE
+*/
+app.post('/admin/clients', async (req, res) => {
+  try {
+    const { name, webhook_secret, printnode_api_key, is_active } = req.body;
+
+    if (!name || !webhook_secret || !printnode_api_key) {
+      return res.status(400).json({
+        ok: false,
+        error: 'name, webhook_secret and printnode_api_key are required'
+      });
+    }
+
+    const existing = await pool.query(
+      'SELECT id FROM clients WHERE webhook_secret = $1 LIMIT 1',
+      [webhook_secret]
+    );
+
+    if (existing.rows.length > 0) {
+      const updated = await pool.query(
+        `
+        UPDATE clients
+        SET name = $1,
+            printnode_api_key = $2,
+            is_active = $3
+        WHERE webhook_secret = $4
+        RETURNING id, name, webhook_secret, is_active
+        `,
+        [name, printnode_api_key, is_active ?? true, webhook_secret]
+      );
+
+      return res.json({
+        ok: true,
+        message: 'Client updated successfully',
+        client: updated.rows[0]
+      });
+    }
+
+    const inserted = await pool.query(
+      `
+      INSERT INTO clients (name, webhook_secret, printnode_api_key, is_active)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, webhook_secret, is_active
+      `,
+      [name, webhook_secret, printnode_api_key, is_active ?? true]
+    );
+
+    return res.json({
+      ok: true,
+      message: 'Client created successfully',
+      client: inserted.rows[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
       ok: false,
       error: error.message
     });
@@ -346,3 +408,4 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
+``
