@@ -9,20 +9,11 @@ app.use(express.json());
 app.use(express.text({ type: 'text/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
-const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET; // still used for internal/admin helpers if needed
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 10000;
-
-/*
-  CURRENT LIVE LOGIC STILL USES THIS HARDCODED MAPPING
-*/
-const PRINTER_MAP = {
-  "Main Warehouse": 75444320,
-  "Default": 75444320
-};
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -33,9 +24,6 @@ app.get('/', (req, res) => {
   res.send('Cin7 auto print server is running');
 });
 
-/*
-  SERVE FIRST ONBOARDING PAGE
-*/
 app.get('/onboarding', (req, res) => {
   res.sendFile(path.join(__dirname, 'onboarding-page.html'));
 });
@@ -51,18 +39,17 @@ app.get('/health', async (req, res) => {
 
 app.get('/status', async (req, res) => {
   try {
-    const printedResult = await pool.query('SELECT COUNT(*) AS count FROM printed_invoices');
-    const logsResult = await pool.query('SELECT COUNT(*) AS count FROM print_logs');
     const clientsResult = await pool.query('SELECT COUNT(*) AS count FROM clients');
     const printersResult = await pool.query('SELECT COUNT(*) AS count FROM client_printers');
+    const printedResult = await pool.query('SELECT COUNT(*) AS count FROM client_printed_invoices');
+    const logsResult = await pool.query('SELECT COUNT(*) AS count FROM client_print_logs');
 
     res.json({
       ok: true,
-      printedInvoices: Number(printedResult.rows[0].count),
-      logRows: Number(logsResult.rows[0].count),
       clientsCount: Number(clientsResult.rows[0].count),
       clientPrintersCount: Number(printersResult.rows[0].count),
-      printerMappings: PRINTER_MAP
+      printedInvoices: Number(printedResult.rows[0].count),
+      logRows: Number(logsResult.rows[0].count)
     });
   } catch (error) {
     res.status(500).json({
@@ -73,7 +60,7 @@ app.get('/status', async (req, res) => {
 });
 
 /*
-  SAVE CLIENT ROUTE
+  SAVE CLIENT
 */
 app.post('/admin/clients', async (req, res) => {
   try {
@@ -134,7 +121,7 @@ app.post('/admin/clients', async (req, res) => {
 });
 
 /*
-  SAVE PRINTERS ROUTE
+  SAVE PRINTERS
 */
 app.post('/admin/clients/:clientId/printers', async (req, res) => {
   try {
@@ -191,10 +178,7 @@ app.post('/admin/clients/:clientId/printers', async (req, res) => {
       }
     }
 
-    await pool.query(
-      'DELETE FROM client_printers WHERE client_id = $1',
-      [clientId]
-    );
+    await pool.query('DELETE FROM client_printers WHERE client_id = $1', [clientId]);
 
     for (const printer of printers) {
       await pool.query(
@@ -228,66 +212,29 @@ app.post('/admin/clients/:clientId/printers', async (req, res) => {
 });
 
 /*
-  ONE-TIME SEED ROUTE
-  CURRENTLY KEPT AS-IS
+  DB-DRIVEN LIVE WEBHOOK
+  secret -> client -> client printers -> fallback printing
 */
-app.get('/seed-first-client', async (req, res) => {
-  try {
-    const master = req.query.master;
+app.post('/webhook/cin7', async (req, res) => {
+  const providedSecret = req.query.secret;
 
-    if (!WEBHOOK_SECRET || master !== WEBHOOK_SECRET) {
+  try {
+    const client = await getClientBySecret(providedSecret);
+
+    if (!client) {
+      await writeSystemLog('UNAUTHORIZED WEBHOOK ATTEMPT');
       return res.status(401).send('Unauthorized');
     }
 
-    const existing = await pool.query(
-      'SELECT id, name, webhook_secret FROM clients WHERE webhook_secret = $1 LIMIT 1',
-      ['Nexvista']
-    );
-
-    if (existing.rows.length > 0) {
-      return res.json({
-        ok: true,
-        message: 'Client already exists',
-        client: existing.rows[0]
-      });
-    }
-
-    const inserted = await pool.query(
-      `
-      INSERT INTO clients (name, webhook_secret, printnode_api_key, is_active)
-      VALUES ($1, $2, $3, TRUE)
-      RETURNING id, name, webhook_secret
-      `,
-      ['Client A', 'Nexvista', PRINTNODE_API_KEY]
-    );
-
-    return res.json({
-      ok: true,
-      message: 'First client inserted successfully',
-      client: inserted.rows[0]
-    });
+    res.status(200).send('OK');
+    processPrint(req.body, client);
   } catch (error) {
-    return res.status(500).json({
-      ok: false,
-      error: error.message
-    });
+    return res.status(500).send('Server error');
   }
-});
-
-app.post('/webhook/cin7', (req, res) => {
-  const providedSecret = req.query.secret;
-
-  if (!WEBHOOK_SECRET || providedSecret !== WEBHOOK_SECRET) {
-    writeLog('UNAUTHORIZED WEBHOOK ATTEMPT');
-    return res.status(401).send('Unauthorized');
-  }
-
-  res.status(200).send('OK');
-  processPrint(req.body);
 });
 
 async function initDb() {
-  // CURRENT LIVE TABLES
+  // Legacy tables kept for compatibility
   await pool.query(`
     CREATE TABLE IF NOT EXISTS print_logs (
       id SERIAL PRIMARY KEY,
@@ -304,7 +251,7 @@ async function initDb() {
     )
   `);
 
-  // NEW MULTI-CLIENT TABLES
+  // New multi-client tables
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clients (
       id SERIAL PRIMARY KEY,
@@ -350,7 +297,35 @@ async function initDb() {
   `);
 }
 
-async function writeLog(message) {
+async function getClientBySecret(secret) {
+  const result = await pool.query(
+    `
+    SELECT id, name, webhook_secret, printnode_api_key, is_active
+    FROM clients
+    WHERE webhook_secret = $1 AND is_active = TRUE
+    LIMIT 1
+    `,
+    [secret]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getClientPrinters(clientId) {
+  const result = await pool.query(
+    `
+    SELECT id, printer_id, printer_name, priority_order, is_default, is_active
+    FROM client_printers
+    WHERE client_id = $1 AND is_active = TRUE
+    ORDER BY priority_order ASC, id ASC
+    `,
+    [clientId]
+  );
+
+  return result.rows;
+}
+
+async function writeSystemLog(message) {
   const line = `[${new Date().toISOString()}] ${message}`;
   console.log(line);
 
@@ -360,23 +335,49 @@ async function writeLog(message) {
       [line]
     );
   } catch (error) {
-    console.log('LOG DB ERROR:', error.message);
+    console.log('SYSTEM LOG DB ERROR:', error.message);
   }
 }
 
-async function hasPrinted(invoiceNumber) {
+async function writeClientLog(clientId, invoiceNumber, message) {
+  const line = `[${new Date().toISOString()}] ${message}`;
+  console.log(line);
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO client_print_logs (client_id, invoice_number, message)
+      VALUES ($1, $2, $3)
+      `,
+      [clientId, invoiceNumber || null, line]
+    );
+  } catch (error) {
+    console.log('CLIENT LOG DB ERROR:', error.message);
+  }
+}
+
+async function hasPrintedForClient(clientId, invoiceNumber) {
   const result = await pool.query(
-    'SELECT 1 FROM printed_invoices WHERE invoice_number = $1 LIMIT 1',
-    [invoiceNumber]
+    `
+    SELECT 1
+    FROM client_printed_invoices
+    WHERE client_id = $1 AND invoice_number = $2
+    LIMIT 1
+    `,
+    [clientId, invoiceNumber]
   );
 
   return result.rows.length > 0;
 }
 
-async function markPrinted(invoiceNumber) {
+async function markPrintedForClient(clientId, invoiceNumber) {
   await pool.query(
-    'INSERT INTO printed_invoices (invoice_number) VALUES ($1) ON CONFLICT (invoice_number) DO NOTHING',
-    [invoiceNumber]
+    `
+    INSERT INTO client_printed_invoices (client_id, invoice_number)
+    VALUES ($1, $2)
+    ON CONFLICT (client_id, invoice_number) DO NOTHING
+    `,
+    [clientId, invoiceNumber]
   );
 }
 
@@ -384,15 +385,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function getPrinterId(locationName) {
-  if (locationName && PRINTER_MAP[locationName]) {
-    return PRINTER_MAP[locationName];
-  }
-
-  return PRINTER_MAP["Default"];
-}
-
-async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
+async function sendToPrintNode(invoiceNumber, pdfBase64, printerId, printnodeApiKey) {
   return axios.post(
     'https://api.printnode.com/printjobs',
     {
@@ -404,7 +397,7 @@ async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
     },
     {
       auth: {
-        username: PRINTNODE_API_KEY,
+        username: printnodeApiKey,
         password: ''
       },
       headers: {
@@ -415,26 +408,31 @@ async function sendToPrintNode(invoiceNumber, pdfBase64, printerId) {
   );
 }
 
-async function processPrint(rawBody) {
+async function processPrint(rawBody, client) {
   try {
-    const body = JSON.parse(rawBody);
+    const body = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
 
     const invoiceNumber = body.InvoiceNumber || 'Unknown-Invoice';
     const downloadLink = body.DownloadLink;
-    const locationName = body.Location || body.LocationName || 'Default';
-    const printerId = getPrinterId(locationName);
 
     if (!downloadLink) {
-      await writeLog(`ERROR | ${invoiceNumber} | DownloadLink missing`);
+      await writeClientLog(client.id, invoiceNumber, `ERROR | ${client.name} | DownloadLink missing`);
       return;
     }
 
-    if (await hasPrinted(invoiceNumber)) {
-      await writeLog(`SKIPPED DUPLICATE | ${invoiceNumber}`);
+    const printers = await getClientPrinters(client.id);
+
+    if (!printers.length) {
+      await writeClientLog(client.id, invoiceNumber, `ERROR | ${client.name} | No active printers configured`);
       return;
     }
 
-    await writeLog(`START PRINT | ${invoiceNumber} | Location: ${locationName} | Printer: ${printerId}`);
+    if (await hasPrintedForClient(client.id, invoiceNumber)) {
+      await writeClientLog(client.id, invoiceNumber, `SKIPPED DUPLICATE | ${client.name} | ${invoiceNumber}`);
+      return;
+    }
+
+    await writeClientLog(client.id, invoiceNumber, `START PRINT | ${client.name} | ${invoiceNumber}`);
 
     const pdfResponse = await axios.get(downloadLink, {
       responseType: 'arraybuffer',
@@ -443,35 +441,71 @@ async function processPrint(rawBody) {
 
     const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        await writeLog(`PRINT ATTEMPT ${attempt} | ${invoiceNumber}`);
+    for (const printer of printers) {
+      await writeClientLog(
+        client.id,
+        invoiceNumber,
+        `TRY PRINTER | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id} | Priority: ${printer.priority_order}`
+      );
 
-        const printResponse = await sendToPrintNode(invoiceNumber, pdfBase64, printerId);
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          await writeClientLog(
+            client.id,
+            invoiceNumber,
+            `PRINT ATTEMPT ${attempt} | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id}`
+          );
 
-        await markPrinted(invoiceNumber);
-        await writeLog(`PRINT SUCCESS | ${invoiceNumber} | PrintNode Job ID: ${printResponse.data}`);
-        return;
-      } catch (error) {
-        await writeLog(`PRINT ATTEMPT FAILED ${attempt} | ${invoiceNumber} | ${error.response?.data || error.message}`);
+          const printResponse = await sendToPrintNode(
+            invoiceNumber,
+            pdfBase64,
+            printer.printer_id,
+            client.printnode_api_key
+          );
 
-        if (attempt < MAX_RETRIES) {
-          await writeLog(`RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${invoiceNumber}`);
-          await sleep(RETRY_DELAY_MS);
-        } else {
-          await writeLog(`PRINT FAILED FINAL | ${invoiceNumber}`);
+          await markPrintedForClient(client.id, invoiceNumber);
+
+          await writeClientLog(
+            client.id,
+            invoiceNumber,
+            `PRINT SUCCESS | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id} | PrintNode Job ID: ${printResponse.data}`
+          );
+
+          return;
+        } catch (error) {
+          await writeClientLog(
+            client.id,
+            invoiceNumber,
+            `PRINT ATTEMPT FAILED ${attempt} | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id} | ${error.response?.data || error.message}`
+          );
+
+          if (attempt < MAX_RETRIES) {
+            await writeClientLog(
+              client.id,
+              invoiceNumber,
+              `RETRYING IN ${RETRY_DELAY_MS / 1000} SECONDS | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id}`
+            );
+            await sleep(RETRY_DELAY_MS);
+          }
         }
       }
     }
+
+    await writeClientLog(client.id, invoiceNumber, `PRINT FAILED FINAL | ${client.name} | ${invoiceNumber} | All printers failed`);
   } catch (error) {
-    await writeLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
+    await writeSystemLog(`PROCESS FAILED | ${error.response?.data || error.message}`);
   }
 }
 
 app.get('/logs', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT created_at, message FROM print_logs ORDER BY id DESC LIMIT 200'
+      `
+      SELECT created_at, message
+      FROM client_print_logs
+      ORDER BY id DESC
+      LIMIT 200
+      `
     );
 
     const text = result.rows.map(r => r.message).join('\n');
@@ -484,10 +518,15 @@ app.get('/logs', async (req, res) => {
 app.get('/printed', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT invoice_number FROM printed_invoices ORDER BY id DESC LIMIT 200'
+      `
+      SELECT client_id, invoice_number
+      FROM client_printed_invoices
+      ORDER BY id DESC
+      LIMIT 200
+      `
     );
 
-    const text = result.rows.map(r => r.invoice_number).join('\n');
+    const text = result.rows.map(r => `client_id=${r.client_id} | invoice=${r.invoice_number}`).join('\n');
     res.type('text/plain').send(text || 'No printed invoices yet');
   } catch (error) {
     res.status(500).send('Printed read failed');
