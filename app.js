@@ -54,12 +54,14 @@ app.get('/status', async (req, res) => {
     const printedResult = await pool.query('SELECT COUNT(*) AS count FROM printed_invoices');
     const logsResult = await pool.query('SELECT COUNT(*) AS count FROM print_logs');
     const clientsResult = await pool.query('SELECT COUNT(*) AS count FROM clients');
+    const printersResult = await pool.query('SELECT COUNT(*) AS count FROM client_printers');
 
     res.json({
       ok: true,
       printedInvoices: Number(printedResult.rows[0].count),
       logRows: Number(logsResult.rows[0].count),
       clientsCount: Number(clientsResult.rows[0].count),
+      clientPrintersCount: Number(printersResult.rows[0].count),
       printerMappings: PRINTER_MAP
     });
   } catch (error) {
@@ -122,6 +124,100 @@ app.post('/admin/clients', async (req, res) => {
       ok: true,
       message: 'Client created successfully',
       client: inserted.rows[0]
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
+  SAVE PRINTERS ROUTE
+*/
+app.post('/admin/clients/:clientId/printers', async (req, res) => {
+  try {
+    const clientId = Number(req.params.clientId);
+    const { printers } = req.body;
+
+    if (!clientId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Valid clientId is required'
+      });
+    }
+
+    const clientCheck = await pool.query(
+      'SELECT id FROM clients WHERE id = $1 LIMIT 1',
+      [clientId]
+    );
+
+    if (clientCheck.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Client not found'
+      });
+    }
+
+    if (!Array.isArray(printers) || printers.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'At least one printer is required'
+      });
+    }
+
+    if (printers.length > 5) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Maximum 5 printers allowed'
+      });
+    }
+
+    const defaultCount = printers.filter(p => p.is_default === true).length;
+    if (defaultCount !== 1) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Exactly one default printer is required'
+      });
+    }
+
+    for (const printer of printers) {
+      if (!printer.printer_id || !printer.priority_order) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Each printer must have printer_id and priority_order'
+        });
+      }
+    }
+
+    await pool.query(
+      'DELETE FROM client_printers WHERE client_id = $1',
+      [clientId]
+    );
+
+    for (const printer of printers) {
+      await pool.query(
+        `
+        INSERT INTO client_printers
+          (client_id, printer_id, printer_name, priority_order, is_default, is_active)
+        VALUES
+          ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          clientId,
+          printer.printer_id,
+          printer.printer_name || '',
+          printer.priority_order,
+          printer.is_default ?? false,
+          printer.is_active ?? true
+        ]
+      );
+    }
+
+    return res.json({
+      ok: true,
+      message: 'Printers saved successfully'
     });
   } catch (error) {
     return res.status(500).json({
@@ -408,4 +504,3 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
-``
