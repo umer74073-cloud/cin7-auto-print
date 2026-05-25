@@ -20,6 +20,9 @@
     .primary { background: #0f62fe; color: white; }
     .secondary { background: #e5e5e5; }
     .note { margin-top: 16px; font-size: 14px; color: #555; }
+    .message { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
+    .success { background: #e8f5e9; color: #1b5e20; }
+    .error { background: #ffebee; color: #b71c1c; }
   </style>
 </head>
 <body>
@@ -30,21 +33,21 @@
     <div class="grid">
       <div class="field">
         <label>Client Name</label>
-        <input type="text" placeholder="Enter client name" />
+        <input id="clientName" type="text" placeholder="Enter client name" />
       </div>
       <div class="field">
         <label>Webhook Secret</label>
-        <input type="text" placeholder="Enter webhook secret" />
+        <input id="webhookSecret" type="text" placeholder="Enter webhook secret" />
       </div>
       <div class="field" style="grid-column: 1 / span 2;">
         <label>PrintNode API Key</label>
-        <input type="text" placeholder="Enter PrintNode API key" />
+        <input id="printnodeApiKey" type="text" placeholder="Enter PrintNode API key" />
       </div>
       <div class="field">
         <label>Active</label>
-        <select>
-          <option>Yes</option>
-          <option>No</option>
+        <select id="isActive">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
         </select>
       </div>
     </div>
@@ -99,13 +102,62 @@
     </div>
 
     <div class="buttons">
-      <button class="primary">Save Client</button>
-      <button class="secondary">Cancel</button>
+      <button class="primary" onclick="saveClient()">Save Client</button>
+      <button class="secondary" onclick="clearForm()">Cancel</button>
     </div>
 
+    <div id="messageBox" class="message"></div>
+
     <div class="note">
-      This is the first onboarding page layout only. No save logic is connected yet.
+      This step saves only client details. Printers are still layout only for now.
     </div>
   </div>
+
+  <script>
+    async function saveClient() {
+      const payload = {
+        name: document.getElementById('clientName').value.trim(),
+        webhook_secret: document.getElementById('webhookSecret').value.trim(),
+        printnode_api_key: document.getElementById('printnodeApiKey').value.trim(),
+        is_active: document.getElementById('isActive').value === 'true'
+      };
+
+      const box = document.getElementById('messageBox');
+
+      try {
+        const response = await fetch('/admin/clients', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (result.ok) {
+          box.className = 'message success';
+          box.style.display = 'block';
+          box.textContent = result.message;
+        } else {
+          box.className = 'message error';
+          box.style.display = 'block';
+          box.textContent = result.error || 'Save failed';
+        }
+      } catch (error) {
+        box.className = 'message error';
+        box.style.display = 'block';
+        box.textContent = 'Request failed';
+      }
+    }
+
+    function clearForm() {
+      document.getElementById('clientName').value = '';
+      document.getElementById('webhookSecret').value = '';
+      document.getElementById('printnodeApiKey').value = '';
+      document.getElementById('isActive').value = 'true';
+      document.getElementById('messageBox').style.display = 'none';
+    }
+  </script>
 </body>
 </html>
