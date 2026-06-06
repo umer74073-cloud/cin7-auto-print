@@ -9,7 +9,6 @@ app.use(express.json());
 app.use(express.text({ type: 'text/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
@@ -26,6 +25,10 @@ app.get('/', (req, res) => {
 
 app.get('/onboarding', (req, res) => {
   res.sendFile(path.join(__dirname, 'onboarding-page.html'));
+});
+
+app.get('/client-logs', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client-logs.html'));
 });
 
 app.get('/health', async (req, res) => {
