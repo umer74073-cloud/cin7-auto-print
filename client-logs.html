@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Logs</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; color: #222; }
+    .container { max-width: 1100px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    h1 { margin-top: 0; }
+    .toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 20px; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+    label { font-weight: bold; }
+    select, button { padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+    button { cursor: pointer; border: 0; }
+    .primary { background: #0f62fe; color: white; }
+    .secondary { background: #e5e5e5; color: #222; }
+    .box { background: #fafafa; border: 1px solid #ddd; border-radius: 10px; padding: 14px; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 13px; min-height: 320px; overflow: auto; }
+    .message { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; }
+    .success { background: #e8f5e9; color: #1b5e20; }
+    .error { background: #ffebee; color: #b71c1c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Client Logs</h1>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>Select Client</label>
+        <select id="clientSelect">
+          <option value="">Loading clients...</option>
+        </select>
+      </div>
+
+      <button class="primary" onclick="loadLogs()">Load Logs</button>
+      <button class="secondary" onclick="refreshClients()">Refresh Clients</button>
+    </div>
+
+    <div id="messageBox" class="message"></div>
+
+    <div id="logsBox" class="box">Select a client and click "Load Logs"</div>
+  </div>
+
+  <script>
+    async function refreshClients() {
+      const select = document.getElementById('clientSelect');
+      const box = document.getElementById('messageBox');
+
+      try {
+        const response = await fetch('/admin/clients');
+        const result = await response.json();
+
+        if (!result.ok) {
+          box.className = 'message error';
+          box.style.display = 'block';
+          box.textContent = result.error || 'Failed to load clients';
+          return;
+        }
+
+        select.innerHTML = '<option value="">Select client</option>';
+
+        result.clients.forEach(client => {
+          const option = document.createElement('option');
+          option.value = client.id;
+          option.textContent = `${client.id} - ${client.name}`;
+          select.appendChild(option);
+        });
+
+        box.className = 'message success';
+        box.style.display = 'block';
+        box.textContent = 'Clients loaded successfully';
+      } catch (error) {
+        box.className = 'message error';
+        box.style.display = 'block';
+        box.textContent = 'Request failed while loading clients';
+      }
+    }
+
+    async function loadLogs() {
+      const clientId = document.getElementById('clientSelect').value;
+      const box = document.getElementById('messageBox');
+      const logsBox = document.getElementById('logsBox');
+
+      if (!clientId) {
+        box.className = 'message error';
+        box.style.display = 'block';
+        box.textContent = 'Please select a client';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/admin/clients/${clientId}/logs`);
+        const result = await response.json();
+
+        if (!result.ok) {
+          box.className = 'message error';
+          box.style.display = 'block';
+          box.textContent = result.error || 'Failed to load logs';
+          return;
+        }
+
+        const lines = result.logs.map(log => log.message);
+
+        logsBox.textContent = lines.length ? lines.join('\n') : 'No logs found for this client';
+
+        box.className = 'message success';
+        box.style.display = 'block';
+        box.textContent = `Loaded logs for ${result.client.name}`;
+      } catch (error) {
+        box.className = 'message error';
+        box.style.display = 'block';
+        box.textContent = 'Request failed while loading logs';
+      }
+    }
+
+    refreshClients();
+  </script>
+</body>
+</html>
