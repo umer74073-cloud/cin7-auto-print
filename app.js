@@ -91,6 +91,56 @@ app.get('/admin/clients', async (req, res) => {
 });
 
 /*
+  CLIENT-SPECIFIC LOGS
+*/
+app.get('/admin/clients/:clientId/logs', async (req, res) => {
+  try {
+    const clientId = Number(req.params.clientId);
+
+    if (!clientId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Valid clientId is required'
+      });
+    }
+
+    const clientCheck = await pool.query(
+      'SELECT id, name FROM clients WHERE id = $1 LIMIT 1',
+      [clientId]
+    );
+
+    if (clientCheck.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Client not found'
+      });
+    }
+
+    const logs = await pool.query(
+      `
+      SELECT created_at, invoice_number, message
+      FROM client_print_logs
+      WHERE client_id = $1
+      ORDER BY id DESC
+      LIMIT 200
+      `,
+      [clientId]
+    );
+
+    return res.json({
+      ok: true,
+      client: clientCheck.rows[0],
+      logs: logs.rows
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
   FETCH PRINTERS FROM PRINTNODE
 */
 app.post('/admin/printnode/printers', async (req, res) => {
