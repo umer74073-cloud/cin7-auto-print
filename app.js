@@ -62,9 +62,6 @@ app.get('/status', async (req, res) => {
   }
 });
 
-/*
-  LIST ALL CLIENTS
-*/
 app.get('/admin/clients', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -93,9 +90,6 @@ app.get('/admin/clients', async (req, res) => {
   }
 });
 
-/*
-  CLIENT-SPECIFIC LOGS
-*/
 app.get('/admin/clients/:clientId/logs', async (req, res) => {
   try {
     const clientId = Number(req.params.clientId);
@@ -144,8 +138,56 @@ app.get('/admin/clients/:clientId/logs', async (req, res) => {
 });
 
 /*
-  FETCH PRINTERS FROM PRINTNODE
+  CLIENT-ONLY LOGS BY SECRET
+  Client can view only own logs using own webhook secret
 */
+app.get('/client/logs', async (req, res) => {
+  try {
+    const secret = (req.query.secret || '').trim();
+
+    if (!secret) {
+      return res.status(400).json({
+        ok: false,
+        error: 'secret is required'
+      });
+    }
+
+    const client = await getClientBySecret(secret);
+
+    if (!client) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Invalid secret'
+      });
+    }
+
+    const logs = await pool.query(
+      `
+      SELECT created_at, invoice_number, message
+      FROM client_print_logs
+      WHERE client_id = $1
+      ORDER BY id DESC
+      LIMIT 200
+      `,
+      [client.id]
+    );
+
+    return res.json({
+      ok: true,
+      client: {
+        id: client.id,
+        name: client.name
+      },
+      logs: logs.rows
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
 app.post('/admin/printnode/printers', async (req, res) => {
   try {
     const { printnode_api_key } = req.body;
@@ -184,9 +226,6 @@ app.post('/admin/printnode/printers', async (req, res) => {
   }
 });
 
-/*
-  SAVE CLIENT
-*/
 app.post('/admin/clients', async (req, res) => {
   try {
     const { name, webhook_secret, printnode_api_key, is_active } = req.body;
@@ -245,9 +284,6 @@ app.post('/admin/clients', async (req, res) => {
   }
 });
 
-/*
-  SAVE PRINTERS
-*/
 app.post('/admin/clients/:clientId/printers', async (req, res) => {
   try {
     const clientId = Number(req.params.clientId);
@@ -336,9 +372,6 @@ app.post('/admin/clients/:clientId/printers', async (req, res) => {
   }
 });
 
-/*
-  DB-DRIVEN LIVE WEBHOOK
-*/
 app.post('/webhook/cin7', async (req, res) => {
   const providedSecret = req.query.secret;
 
