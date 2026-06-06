@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clients Admin</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; color: #222; }
+    .container { max-width: 1200px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    h1 { margin-top: 0; }
+    .toolbar { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 20px; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+    label { font-weight: bold; }
+    input, button { padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+    button { cursor: pointer; border: 0; }
+    .primary { background: #0f62fe; color: white; }
+    .secondary { background: #e5e5e5; color: #222; }
+    .danger { background: #d32f2f; color: white; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    th { background: #fafafa; }
+    .message { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; }
+    .success { background: #e8f5e9; color: #1b5e20; }
+    .error { background: #ffebee; color: #b71c1c; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Clients Admin</h1>
+
+    <div class="toolbar">
+      <div class="field">
+        <label>Admin Password</label>
+        <input id="adminPassword" type="password" placeholder="Enter admin password" />
+      </div>
+      <button class="primary" onclick="loadClients()">Load Clients</button>
+      <button class="secondary" onclick="openNewClient()">New Client</button>
+    </div>
+
+    <div id="messageBox" class="message"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Secret</th>
+          <th>Active</th>
+          <th>Printers</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="clientsTableBody">
+        <tr><td colspan="7">Click "Load Clients"</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function showMessage(text, isSuccess) {
+      const box = document.getElementById('messageBox');
+      box.className = isSuccess ? 'message success' : 'message error';
+      box.style.display = 'block';
+      box.textContent = text;
+    }
+
+    function getAdminPassword() {
+      const value = document.getElementById('adminPassword').value.trim();
+      if (value) return value;
+      const params = new URLSearchParams(window.location.search);
+      return params.get('admin') || '';
+    }
+
+    function setAdminPasswordFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const admin = params.get('admin') || '';
+      if (admin) document.getElementById('adminPassword').value = admin;
+    }
+
+    function openNewClient() {
+      const admin = getAdminPassword();
+      if (!admin) {
+        showMessage('Enter admin password first', false);
+        return;
+      }
+      window.location.href = `/onboarding?admin=${encodeURIComponent(admin)}`;
+    }
+
+    function openEditClient(clientId) {
+      const admin = getAdminPassword();
+      window.location.href = `/onboarding?clientId=${encodeURIComponent(clientId)}&admin=${encodeURIComponent(admin)}`;
+    }
+
+    function openLogs(clientId) {
+      const admin = getAdminPassword();
+      window.location.href = `/client-logs?admin=${encodeURIComponent(admin)}&clientId=${encodeURIComponent(clientId)}`;
+    }
+
+    async function setClientStatus(clientId, isActive) {
+      const admin = getAdminPassword();
+      if (!admin) {
+        showMessage('Enter admin password first', false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/admin/clients/${clientId}/status?admin=${encodeURIComponent(admin)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: isActive })
+        });
+        const result = await response.json();
+        if (!result.ok) {
+          showMessage(result.error || 'Status update failed', false);
+          return;
+        }
+        showMessage(result.message, true);
+        loadClients();
+      } catch (error) {
+        showMessage('Request failed while updating status', false);
+      }
+    }
+
+    async function deleteClient(clientId) {
+      const admin = getAdminPassword();
+      if (!admin) {
+        showMessage('Enter admin password first', false);
+        return;
+      }
+      if (!confirm('Delete this client permanently?')) return;
+
+      try {
+        const response = await fetch(`/admin/clients/${clientId}?admin=${encodeURIComponent(admin)}`, {
+          method: 'DELETE'
+        });
+        const result = await response.json();
+        if (!result.ok) {
+          showMessage(result.error || 'Delete failed', false);
+          return;
+        }
+        showMessage(result.message, true);
+        loadClients();
+      } catch (error) {
+        showMessage('Request failed while deleting client', false);
+      }
+    }
+
+    async function loadClients() {
+      const admin = getAdminPassword();
+      if (!admin) {
+        showMessage('Enter admin password first', false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/admin/clients?admin=${encodeURIComponent(admin)}`);
+        const result = await response.json();
+        if (!result.ok) {
+          showMessage(result.error || 'Failed to load clients', false);
+          return;
+        }
+
+        const body = document.getElementById('clientsTableBody');
+        body.innerHTML = '';
+
+        if (!result.clients.length) {
+          body.innerHTML = '<tr><td colspan="7">No clients found</td></tr>';
+          return;
+        }
+
+        result.clients.forEach(client => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${client.id}</td>
+            <td>${client.name}</td>
+            <td>${client.webhook_secret}</td>
+            <td>${client.is_active}</td>
+            <td>${client.printers_count}</td>
+            <td>${client.created_at || ''}</td>
+            <td>
+              <div class="actions">
+                <button class="secondary" onclick="openEditClient(${client.id})">Edit</button>
+                <button class="secondary" onclick="openLogs(${client.id})">Logs</button>
+                <button class="secondary" onclick="setClientStatus(${client.id}, ${client.is_active ? 'false' : 'true'})">${client.is_active ? 'Deactivate' : 'Activate'}</button>
+                <button class="danger" onclick="deleteClient(${client.id})">Delete</button>
+              </div>
+            </td>
+          `;
+          body.appendChild(tr);
+        });
+
+        showMessage('Clients loaded successfully', true);
+      } catch (error) {
+        showMessage('Request failed while loading clients', false);
+      }
+    }
+
+    setAdminPasswordFromUrl();
+  </script>
+</body>
+</html>
