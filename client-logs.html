@@ -19,13 +19,14 @@
     .message { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; }
     .success { background: #e8f5e9; color: #1b5e20; }
     .error { background: #ffebee; color: #b71c1c; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Client Logs</h1>
 
-    <div class="toolbar">
+    <div id="adminToolbar" class="toolbar">
       <div class="field">
         <label>Select Client</label>
         <select id="clientSelect">
@@ -43,18 +44,27 @@
   </div>
 
   <script>
+    function showMessage(text, isSuccess) {
+      const box = document.getElementById('messageBox');
+      box.className = isSuccess ? 'message success' : 'message error';
+      box.style.display = 'block';
+      box.textContent = text;
+    }
+
+    function getSecretFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('secret') || '';
+    }
+
     async function refreshClients() {
       const select = document.getElementById('clientSelect');
-      const box = document.getElementById('messageBox');
 
       try {
         const response = await fetch('/admin/clients');
         const result = await response.json();
 
         if (!result.ok) {
-          box.className = 'message error';
-          box.style.display = 'block';
-          box.textContent = result.error || 'Failed to load clients';
+          showMessage(result.error || 'Failed to load clients', false);
           return;
         }
 
@@ -67,25 +77,18 @@
           select.appendChild(option);
         });
 
-        box.className = 'message success';
-        box.style.display = 'block';
-        box.textContent = 'Clients loaded successfully';
+        showMessage('Clients loaded successfully', true);
       } catch (error) {
-        box.className = 'message error';
-        box.style.display = 'block';
-        box.textContent = 'Request failed while loading clients';
+        showMessage('Request failed while loading clients', false);
       }
     }
 
     async function loadLogs() {
       const clientId = document.getElementById('clientSelect').value;
-      const box = document.getElementById('messageBox');
       const logsBox = document.getElementById('logsBox');
 
       if (!clientId) {
-        box.className = 'message error';
-        box.style.display = 'block';
-        box.textContent = 'Please select a client';
+        showMessage('Please select a client', false);
         return;
       }
 
@@ -94,27 +97,51 @@
         const result = await response.json();
 
         if (!result.ok) {
-          box.className = 'message error';
-          box.style.display = 'block';
-          box.textContent = result.error || 'Failed to load logs';
+          showMessage(result.error || 'Failed to load logs', false);
           return;
         }
 
         const lines = result.logs.map(log => log.message);
-
         logsBox.textContent = lines.length ? lines.join('\n') : 'No logs found for this client';
-
-        box.className = 'message success';
-        box.style.display = 'block';
-        box.textContent = `Loaded logs for ${result.client.name}`;
+        showMessage(`Loaded logs for ${result.client.name}`, true);
       } catch (error) {
-        box.className = 'message error';
-        box.style.display = 'block';
-        box.textContent = 'Request failed while loading logs';
+        showMessage('Request failed while loading logs', false);
       }
     }
 
-    refreshClients();
+    async function loadClientLogsBySecret(secret) {
+      const logsBox = document.getElementById('logsBox');
+
+      try {
+        const response = await fetch(`/client/logs?secret=${encodeURIComponent(secret)}`);
+        const result = await response.json();
+
+        if (!result.ok) {
+          showMessage(result.error || 'Failed to load client logs', false);
+          return;
+        }
+
+        const lines = result.logs.map(log => log.message);
+        logsBox.textContent = lines.length ? lines.join('\n') : 'No logs found for this client';
+        showMessage(`Loaded logs for ${result.client.name}`, true);
+      } catch (error) {
+        showMessage('Request failed while loading client logs', false);
+      }
+    }
+
+    function initPage() {
+      const secret = getSecretFromUrl();
+
+      if (secret) {
+        document.getElementById('adminToolbar').classList.add('hidden');
+        document.getElementById('logsBox').textContent = 'Loading client logs...';
+        loadClientLogsBySecret(secret);
+      } else {
+        refreshClients();
+      }
+    }
+
+    initPage();
   </script>
 </body>
 </html>
