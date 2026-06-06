@@ -9,7 +9,7 @@ app.use(express.json());
 app.use(express.text({ type: 'text/*', limit: '20mb' }));
 
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET; // still used for internal/admin helpers if needed
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const DATABASE_URL = process.env.DATABASE_URL;
 
 const MAX_RETRIES = 3;
@@ -55,6 +55,47 @@ app.get('/status', async (req, res) => {
     res.status(500).json({
       ok: false,
       error: error.message
+    });
+  }
+});
+
+/*
+  FETCH PRINTERS FROM PRINTNODE
+*/
+app.post('/admin/printnode/printers', async (req, res) => {
+  try {
+    const { printnode_api_key } = req.body;
+
+    if (!printnode_api_key) {
+      return res.status(400).json({
+        ok: false,
+        error: 'printnode_api_key is required'
+      });
+    }
+
+    const response = await axios.get('https://api.printnode.com/printers', {
+      auth: {
+        username: printnode_api_key,
+        password: ''
+      },
+      timeout: 30000
+    });
+
+    const printers = (response.data || []).map(p => ({
+      printer_id: p.id,
+      printer_name: p.name || '',
+      computer_name: p.computer && p.computer.name ? p.computer.name : '',
+      description: p.description || ''
+    }));
+
+    return res.json({
+      ok: true,
+      printers
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.response?.data || error.message
     });
   }
 });
@@ -234,7 +275,6 @@ app.post('/webhook/cin7', async (req, res) => {
 });
 
 async function initDb() {
-  // Legacy tables kept for compatibility
   await pool.query(`
     CREATE TABLE IF NOT EXISTS print_logs (
       id SERIAL PRIMARY KEY,
@@ -251,7 +291,6 @@ async function initDb() {
     )
   `);
 
-  // New multi-client tables
   await pool.query(`
     CREATE TABLE IF NOT EXISTS clients (
       id SERIAL PRIMARY KEY,
