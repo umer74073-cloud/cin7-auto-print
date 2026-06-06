@@ -60,6 +60,37 @@ app.get('/status', async (req, res) => {
 });
 
 /*
+  LIST ALL CLIENTS
+*/
+app.get('/admin/clients', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        c.id,
+        c.name,
+        c.webhook_secret,
+        c.is_active,
+        c.created_at,
+        COUNT(cp.id) AS printers_count
+      FROM clients c
+      LEFT JOIN client_printers cp ON cp.client_id = c.id
+      GROUP BY c.id
+      ORDER BY c.id DESC
+    `);
+
+    return res.json({
+      ok: true,
+      clients: result.rows
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
   FETCH PRINTERS FROM PRINTNODE
 */
 app.post('/admin/printnode/printers', async (req, res) => {
@@ -254,7 +285,6 @@ app.post('/admin/clients/:clientId/printers', async (req, res) => {
 
 /*
   DB-DRIVEN LIVE WEBHOOK
-  secret -> client -> client printers -> fallback printing
 */
 app.post('/webhook/cin7', async (req, res) => {
   const providedSecret = req.query.secret;
