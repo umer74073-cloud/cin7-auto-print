@@ -62,6 +62,9 @@ app.get('/status', async (req, res) => {
   }
 });
 
+/*
+  LIST ALL CLIENTS
+*/
 app.get('/admin/clients', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -90,6 +93,63 @@ app.get('/admin/clients', async (req, res) => {
   }
 });
 
+/*
+  GET ONE CLIENT WITH PRINTERS
+*/
+app.get('/admin/clients/:clientId', async (req, res) => {
+  try {
+    const clientId = Number(req.params.clientId);
+
+    if (!clientId) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Valid clientId is required'
+      });
+    }
+
+    const clientResult = await pool.query(
+      `
+      SELECT id, name, webhook_secret, printnode_api_key, is_active, created_at
+      FROM clients
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (clientResult.rows.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Client not found'
+      });
+    }
+
+    const printersResult = await pool.query(
+      `
+      SELECT id, printer_id, printer_name, priority_order, is_default, is_active, created_at
+      FROM client_printers
+      WHERE client_id = $1
+      ORDER BY priority_order ASC, id ASC
+      `,
+      [clientId]
+    );
+
+    return res.json({
+      ok: true,
+      client: clientResult.rows[0],
+      printers: printersResult.rows
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message
+    });
+  }
+});
+
+/*
+  CLIENT-SPECIFIC LOGS
+*/
 app.get('/admin/clients/:clientId/logs', async (req, res) => {
   try {
     const clientId = Number(req.params.clientId);
@@ -139,7 +199,6 @@ app.get('/admin/clients/:clientId/logs', async (req, res) => {
 
 /*
   CLIENT-ONLY LOGS BY SECRET
-  Client can view only own logs using own webhook secret
 */
 app.get('/client/logs', async (req, res) => {
   try {
@@ -188,6 +247,9 @@ app.get('/client/logs', async (req, res) => {
   }
 });
 
+/*
+  FETCH PRINTERS FROM PRINTNODE
+*/
 app.post('/admin/printnode/printers', async (req, res) => {
   try {
     const { printnode_api_key } = req.body;
@@ -226,6 +288,9 @@ app.post('/admin/printnode/printers', async (req, res) => {
   }
 });
 
+/*
+  SAVE CLIENT
+*/
 app.post('/admin/clients', async (req, res) => {
   try {
     const { name, webhook_secret, printnode_api_key, is_active } = req.body;
@@ -284,6 +349,9 @@ app.post('/admin/clients', async (req, res) => {
   }
 });
 
+/*
+  SAVE PRINTERS
+*/
 app.post('/admin/clients/:clientId/printers', async (req, res) => {
   try {
     const clientId = Number(req.params.clientId);
