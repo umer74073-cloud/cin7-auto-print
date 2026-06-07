@@ -1,22 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const axios = require('axios');
-const { Pool } = require('pg');
-const path = require('path');
-
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.text({ type: 'text/*', limit: '20mb' }));
-
-const PORT = process.env.PORT || 3000;
-const DATABASE_URL = process.env.DATABASE_URL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMeNow';
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 10000;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+const axios = require('axios }const axios = require('axios');
 });
 
 function adminAuthorized(req) {
@@ -166,11 +150,19 @@ async function processPrint(rawBody, client) {
     const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
 
     for (const printer of printers) {
-      await writeClientLog(client.id, invoiceNumber, `TRY PRINTER | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id} | Priority: ${printer.priority_order}`);
+      await writeClientLog(
+        client.id,
+        invoiceNumber,
+        `TRY PRINTER | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id} | Priority: ${printer.priority_order}`
+      );
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          await writeClientLog(client.id, invoiceNumber, `PRINT ATTEMPT ${attempt} | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id}`);
+          await writeClientLog(
+            client.id,
+            invoiceNumber,
+            `PRINT ATTEMPT ${attempt} | ${client.name} | ${invoiceNumber} | Printer: ${printer.printer_id}`
+          );
 
           const printResponse = await sendToPrintNode(
             invoiceNumber,
@@ -289,7 +281,9 @@ app.get('/status', requireAdmin, async (req, res) => {
   }
 });
 
-// pages
+/*
+  PAGES
+*/
 app.get('/onboarding', (req, res) => {
   if (!adminAuthorized(req)) {
     return res.status(401).send('Admin authorization required. Add ?admin=YOUR_ADMIN_PASSWORD');
@@ -312,7 +306,20 @@ app.get('/client-logs', (req, res) => {
   res.sendFile(path.join(__dirname, 'client-logs.html'));
 });
 
-// admin APIs
+/*
+  NEW CLIENT PORTAL PAGE
+*/
+app.get('/client-portal', (req, res) => {
+  const hasSecret = (req.query.secret || '').trim();
+  if (!hasSecret) {
+    return res.status(401).send('Client secret is required. Use ?secret=CLIENT_SECRET');
+  }
+  res.sendFile(path.join(__dirname, 'client-portal.html'));
+});
+
+/*
+  ADMIN ROUTES
+*/
 app.get('/admin/clients', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -633,7 +640,9 @@ app.get('/admin/clients/:clientId/logs', requireAdmin, async (req, res) => {
   }
 });
 
-// client self-service logs
+/*
+  CLIENT SELF LOGS
+*/
 app.get('/client/logs', async (req, res) => {
   try {
     const secret = (req.query.secret || '').trim();
@@ -667,7 +676,9 @@ app.get('/client/logs', async (req, res) => {
   }
 });
 
-// db-driven live webhook
+/*
+  WEBHOOK
+*/
 app.post('/webhook/cin7', async (req, res) => {
   const providedSecret = (req.query.secret || '').trim();
 
@@ -685,6 +696,9 @@ app.post('/webhook/cin7', async (req, res) => {
   }
 });
 
+/*
+  ADMIN RAW LOG VIEWS
+*/
 app.get('/logs', requireAdmin, async (req, res) => {
   try {
     const result = await pool.query(
@@ -731,3 +745,19 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
+``
+const { Pool } = require('pg');
+const path = require('path');
+
+const app = express();
+app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: 'text/*', limit: '20mb' }));
+
+const PORT = process.env.PORT || 3000;
+const DATABASE_URL = process.env.DATABASE_URL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMeNow';
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 10000;
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,

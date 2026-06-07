@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Portal</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; color: #222; }
+    .container { max-width: 1100px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    h1, h2 { margin-top: 0; }
+    h2 { margin-top: 24px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label { font-weight: bold; }
+    input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 8px; width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; border: 0; }
+    .primary { background: #0f62fe; color: white; }
+    .secondary { background: #e5e5e5; color: #222; }
+    .row { display: grid; grid-template-columns: 1.4fr 1fr 110px 110px 110px; gap: 10px; margin-bottom: 10px; }
+    .printer-head { font-weight: bold; margin-bottom: 8px; }
+    .buttons { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .message { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
+    .success { background: #e8f5e9; color: #1b5e20; }
+    .error { background: #ffebee; color: #b71c1c; }
+    .info { background: #e3f2fd; color: #0d47a1; }
+    .box { background: #fafafa; border: 1px solid #ddd; border-radius: 10px; padding: 14px; white-space: pre-wrap; font-family: Consolas, monospace; font-size: 13px; min-height: 260px; overflow: auto; }
+    .hidden { display: none !important; }
+    .note { margin-top: 16px; font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Client Portal</h1>
+
+    <div id="portalStatus" class="message info" style="display:block;">
+      Use this page like: <b>?secret=CLIENT_SECRET</b>
+    </div>
+
+    <div id="setupSection">
+      <h2>Initial Setup</h2>
+
+      <div class="grid">
+        <div class="field">
+          <label>Client Name</label>
+          <input id="clientName" type="text" placeholder="Enter client name" />
+        </div>
+
+        <div class="field">
+          <label>Webhook Secret</label>
+          <input id="webhookSecret" type="text" placeholder="Auto-filled from URL if provided" />
+        </div>
+
+        <div class="field" style="grid-column: 1 / span 2;">
+          <label>PrintNode API Key</label>
+          <input id="printnodeApiKey" type="text" placeholder="Enter PrintNode API key" />
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button class="secondary" onclick="fetchPrinters()">Fetch Printers</button>
+        <button class="primary" onclick="saveSetup()">Complete Setup</button>
+      </div>
+
+      <h2>Printers (Up to 5)</h2>
+
+      <div class="row printer-head">
+        <div>Printer Name</div>
+        <div>Printer ID</div>
+        <div>Priority</div>
+        <div>Default</div>
+        <div>Active</div>
+      </div>
+
+      <div class="row">
+        <input class="printer-name" type="text" placeholder="Printer 1" />
+        <input class="printer-id" type="number" placeholder="Printer ID" />
+        <select class="printer-priority">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+        <select class="printer-default">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+        <select class="printer-active">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input class="printer-name" type="text" placeholder="Printer 2" />
+        <input class="printer-id" type="number" placeholder="Printer ID" />
+        <select class="printer-priority">
+          <option value="2">2</option>
+          <option value="1">1</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+        <select class="printer-default">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+        <select class="printer-active">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input class="printer-name" type="text" placeholder="Printer 3" />
+        <input class="printer-id" type="number" placeholder="Printer ID" />
+        <select class="printer-priority">
+          <option value="3">3</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+        <select class="printer-default">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+        <select class="printer-active">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input class="printer-name" type="text" placeholder="Printer 4" />
+        <input class="printer-id" type="number" placeholder="Printer ID" />
+        <select class="printer-priority">
+          <option value="4">4</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="5">5</option>
+        </select>
+        <select class="printer-default">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+        <select class="printer-active">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <input class="printer-name" type="text" placeholder="Printer 5" />
+        <input class="printer-id" type="number" placeholder="Printer ID" />
+        <select class="printer-priority">
+          <option value="5">5</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+        <select class="printer-default">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+        <select class="printer-active">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+    </div>
+
+    <h2>Your Logs</h2>
+    <div id="logsBox" class="box">Logs will appear here.</div>
+
+    <div id="messageBox" class="message"></div>
+
+    <div class="note">
+      This is only the first portal page layout.
+      In next step we will connect:
+      setup save + fetch printers + client logs + read-only after first save.
+    </div>
+  </div>
+
+  <script>
+    function showMessage(text, type = 'success') {
+      const box = document.getElementById('messageBox');
+      box.className = `message ${type}`;
+      box.style.display = 'block';
+      box.textContent = text;
+    }
+
+    function getSecret() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('secret') || '';
+    }
+
+    async function fetchPrinters() {
+      showMessage('Next step will connect backend fetch printers.', 'info');
+    }
+
+    async function saveSetup() {
+      showMessage('Next step will connect backend save setup.', 'info');
+    }
+
+    function initPortal() {
+      const secret = getSecret();
+      if (secret) {
+        document.getElementById('webhookSecret').value = secret;
+      }
+      document.getElementById('logsBox').textContent = 'Client logs section ready. Next step will connect backend.';
+    }
+
+    initPortal();
+  </script>
+</body>
+</html>
