@@ -74,6 +74,19 @@ async function getClientBySecret(secret) {
   return result.rows[0] || null;
 }
 
+async function getClientAnyBySecret(secret) {
+  const result = await pool.query(
+    `
+    SELECT id, name, webhook_secret, printnode_api_key, is_active
+    FROM clients
+    WHERE webhook_secret = $1
+    LIMIT 1
+    `,
+    [secret]
+  );
+  return result.rows[0] || null;
+}
+
 async function getClientPrinters(clientId) {
   const result = await pool.query(
     `
@@ -322,15 +335,176 @@ app.get('/client-logs', (req, res) => {
   res.sendFile(path.join(__dirname, 'client-logs.html'));
 });
 
-/*
-  NEW CLIENT PORTAL PAGE
-*/
 app.get('/client-portal', (req, res) => {
   const hasSecret = (req.query.secret || '').trim();
   if (!hasSecret) {
     return res.status(401).send('Client secret is required. Use ?secret=CLIENT_SECRET');
   }
   res.sendFile(path.join(__dirname, 'client-portal.html'));
+});
+
+/*
+  CLIENT PORTAL ROUTES
+*/
+app.get('/client/setup-status', async (req, res) => {
+  try {
+    const secret = (req.query.secret || '').trim();
+    if (!secret) {
+      return res.status(400).json({ ok: false, error: 'secret is required' });
+    }
+
+    const client = await getClientAnyBySecret(secret);
+
+    if (!client) {
+      return res.json({
+        ok: true,
+        exists: false,
+        setupComplete: false
+      });
+    }
+
+    const printers = await getClientPrinters(client.id);
+
+    return res.json({
+      ok: true,
+      exists: true,
+      setupComplete: printers.length > 0,
+      client: {
+        id: client.id,
+        name: client.name,
+        webhook_secret: client.webhook_secret
+      },
+      printers
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/client/fetch-printers', async (req, res) => {
+  try {
+    const { secret, printnode_api_key } = req.body;
+
+    if (!secret || !printnode_api_key) {
+      return res.status(400).json({ ok: false, error: 'secret and printnode_api_key are required' });
+    }
+
+    const client = await getClientAnyBySecret(secret);
+    if (client && client.is_active && client.printnode_api_key && (await getClientPrinters(client.id)).length > 0) {
+      return res.status(403).json({ ok: false, error: 'Setup already completed. Contact administrator for changes.' });
+    }
+
+    const response = await axios.get('https://api.printnode.com/printers', {
+      auth: {
+        username: printnode_api_key,
+        password: ''
+      },
+      timeout: 30000
+    });
+
+    const printers = (response.data || []).map(p => ({
+      printer_id: p.id,
+      printer_name: p.name || '',
+      computer_name: p.computer && p.computer.name ? p.computer.name : '',
+      description: p.description || ''
+    }));
+
+    res.json({ ok: true, printers });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.response?.data || error.message });
+  }
+});
+
+app.post('/client/complete-setup', async (req, res) => {
+  try {
+    const { name, secret, printnode_api_key, printers } = req.body;
+
+    if (!name || !secret || !printnode_api_key) {
+      return res.status(400).json({ ok: false, error: 'name, secret and printnode_api_key are required' });
+    }
+
+    if (!Array.isArray(printers) || printers.length === 0) {
+      return res.status(400).json({ ok: false, error: 'At least one printer is required' });
+    }
+
+    if (printers.length > 5) {
+      return res.status(400).json({ ok: false, error: 'Maximum 5 printers allowed' });
+    }
+
+    const defaultCount = printers.filter(p => p.is_default === true).length;
+    if (defaultCount !== 1) {
+      return res.status(400).json({ ok: false, error: 'Exactly one primary printer is required' });
+    }
+
+    for (const printer of printers) {
+      if (!printer.printer_id || !printer.priority_order) {
+        return res.status(400).json({ ok: false, error: 'Each printer must have printer_id and priority_order' });
+      }
+    }
+
+    let client = await getClientAnyBySecret(secret);
+
+    if (client) {
+      const existingPrinters = await getClientPrinters(client.id);
+      if (existingPrinters.length > 0) {
+        return res.status(403).json({ ok: false, error: 'Setup already completed. Contact administrator for changes.' });
+      }
+
+      const updated = await pool.query(
+        `
+        UPDATE clients
+        SET name = $1,
+            printnode_api_key = $2,
+            is_active = TRUE
+        WHERE id = $3
+        RETURNING id, name, webhook_secret
+        `,
+        [name, printnode_api_key, client.id]
+      );
+      client = updated.rows[0];
+    } else {
+      const inserted = await pool.query(
+        `
+        INSERT INTO clients (name, webhook_secret, printnode_api_key, is_active)
+        VALUES ($1, $2, $3, TRUE)
+        RETURNING id, name, webhook_secret
+        `,
+        [name, secret, printnode_api_key]
+      );
+      client = inserted.rows[0];
+    }
+
+    await pool.query('DELETE FROM client_printers WHERE client_id = $1', [client.id]);
+
+    for (const printer of printers) {
+      await pool.query(
+        `
+        INSERT INTO client_printers
+          (client_id, printer_id, printer_name, priority_order, is_default, is_active)
+        VALUES
+          ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          client.id,
+          printer.printer_id,
+          printer.printer_name || '',
+          printer.priority_order,
+          printer.is_default ?? false,
+          printer.is_active ?? true
+        ]
+      );
+    }
+
+    await writeClientLog(client.id, null, `CLIENT SETUP COMPLETED | ${client.name}`);
+
+    res.json({
+      ok: true,
+      message: 'Setup completed successfully',
+      client
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 /*
