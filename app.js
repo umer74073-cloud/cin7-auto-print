@@ -1,6 +1,22 @@
 require('dotenv').config();
 const express = require('express');
-const axios = require('axios }const axios = require('axios');
+const axios = require('axios');
+const { Pool } = require('pg');
+const path = require('path');
+
+const app = express();
+app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: 'text/*', limit: '20mb' }));
+
+const PORT = process.env.PORT || 3000;
+const DATABASE_URL = process.env.DATABASE_URL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMeNow';
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 10000;
+
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 function adminAuthorized(req) {
@@ -745,19 +761,3 @@ initDb()
     console.error('DB INIT FAILED:', error.message);
     process.exit(1);
   });
-``
-const { Pool } = require('pg');
-const path = require('path');
-
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.text({ type: 'text/*', limit: '20mb' }));
-
-const PORT = process.env.PORT || 3000;
-const DATABASE_URL = process.env.DATABASE_URL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'ChangeMeNow';
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 10000;
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
