@@ -30,6 +30,12 @@
     .error { background: #ffebee; color: #b71c1c; }
     .info { background: #e3f2fd; color: #0d47a1; }
     .note { margin-top: 16px; font-size: 14px; color: #555; }
+    .hidden { display: none !important; }
+    .readonly input,
+    .readonly select {
+      background: #f1f1f1;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -61,8 +67,8 @@
       </div>
 
       <div class="buttons">
-        <button class="secondary" onclick="fetchPrinters()">Fetch Printers</button>
-        <button class="primary" onclick="saveSetup()">Complete Setup</button>
+        <button id="fetchPrintersBtn" class="secondary" onclick="fetchPrinters()">Fetch Printers</button>
+        <button id="completeSetupBtn" class="primary" onclick="saveSetup()">Complete Setup</button>
         <button class="secondary" onclick="openLogs()">View Print History</button>
       </div>
 
@@ -180,9 +186,8 @@
     <div id="messageBox" class="message"></div>
 
     <div class="note">
-      This step updates only the wording and moves logs to a separate button.
-      Next step will connect backend logic for:
-      first-time setup only + read-only later + printer fetch + save + logs.
+      After first successful setup, this page becomes read-only.
+      If changes are needed later, please contact administrator.
     </div>
   </div>
 
@@ -199,12 +204,135 @@
       return params.get('secret') || '';
     }
 
+    function setReadOnlyMode() {
+      document.getElementById('setupSection').classList.add('readonly');
+      document.getElementById('fetchPrintersBtn').disabled = true;
+      document.getElementById('completeSetupBtn').disabled = true;
+      document.getElementById('fetchPrintersBtn').style.opacity = '0.6';
+      document.getElementById('completeSetupBtn').style.opacity = '0.6';
+    }
+
+    function collectPrinters() {
+      const names = document.querySelectorAll('.printer-name');
+      const ids = document.querySelectorAll('.printer-id');
+      const priorities = document.querySelectorAll('.printer-priority');
+      const defaults = document.querySelectorAll('.printer-default');
+      const actives = document.querySelectorAll('.printer-active');
+      const printers = [];
+
+      for (let i = 0; i < names.length; i++) {
+        const printerIdValue = ids[i].value.trim();
+        const printerNameValue = names[i].value.trim();
+
+        if (!printerIdValue) continue;
+
+        printers.push({
+          printer_id: Number(printerIdValue),
+          printer_name: printerNameValue,
+          priority_order: Number(priorities[i].value),
+          is_default: defaults[i].value === 'true',
+          is_active: actives[i].value === 'true'
+        });
+      }
+
+      return printers;
+    }
+
     async function fetchPrinters() {
-      showMessage('Next step will connect backend fetch printers.', 'info');
+      const secret = getSecret();
+      const printnodeApiKey = document.getElementById('printnodeApiKey').value.trim();
+
+      if (!secret) {
+        showMessage('Connection code is missing in the page link.', 'error');
+        return;
+      }
+
+      if (!printnodeApiKey) {
+        showMessage('Enter PrintNode API Key first.', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/client/fetch-printers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            secret: secret,
+            printnode_api_key: printnodeApiKey
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.ok) {
+          showMessage(result.error || 'Failed to fetch printers.', 'error');
+          return;
+        }
+
+        const names = document.querySelectorAll('.printer-name');
+        const ids = document.querySelectorAll('.printer-id');
+        const priorities = document.querySelectorAll('.printer-priority');
+        const defaults = document.querySelectorAll('.printer-default');
+        const actives = document.querySelectorAll('.printer-active');
+
+        names.forEach(x => x.value = '');
+        ids.forEach(x => x.value = '');
+
+        const printers = result.printers.slice(0, 5);
+
+        for (let i = 0; i < printers.length; i++) {
+          names[i].value = printers[i].printer_name || printers[i].computer_name || `Printer ${i + 1}`;
+          ids[i].value = printers[i].printer_id || '';
+          priorities[i].value = String(i + 1);
+          defaults[i].value = i === 0 ? 'true' : 'false';
+          actives[i].value = 'true';
+        }
+
+        showMessage(`Fetched ${printers.length} printer(s) successfully.`, 'success');
+      } catch (error) {
+        showMessage('Request failed while fetching printers.', 'error');
+      }
     }
 
     async function saveSetup() {
-      showMessage('Next step will connect backend save setup.', 'info');
+      const secret = getSecret();
+      const name = document.getElementById('companyName').value.trim();
+      const printnodeApiKey = document.getElementById('printnodeApiKey').value.trim();
+      const printers = collectPrinters();
+
+      if (!secret) {
+        showMessage('Connection code is missing in the page link.', 'error');
+        return;
+      }
+
+      try {
+        const response = await fetch('/client/complete-setup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: name,
+            secret: secret,
+            printnode_api_key: printnodeApiKey,
+            printers: printers
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.ok) {
+          showMessage(result.error || 'Setup failed.', 'error');
+          return;
+        }
+
+        showMessage('Setup completed successfully.', 'success');
+        setReadOnlyMode();
+      } catch (error) {
+        showMessage('Request failed while saving setup.', 'error');
+      }
     }
 
     function openLogs() {
@@ -216,14 +344,57 @@
       window.location.href = `/client-logs?secret=${encodeURIComponent(secret)}`;
     }
 
-    function initPortal() {
+    async function loadSetupStatus() {
       const secret = getSecret();
-      if (secret) {
-        document.getElementById('connectionCode').value = secret;
+
+      if (!secret) {
+        showMessage('Connection code is missing in the page link.', 'error');
+        return;
+      }
+
+      document.getElementById('connectionCode').value = secret;
+
+      try {
+        const response = await fetch(`/client/setup-status?secret=${encodeURIComponent(secret)}`);
+        const result = await response.json();
+
+        if (!result.ok) {
+          showMessage(result.error || 'Failed to load setup status.', 'error');
+          return;
+        }
+
+        if (result.exists && result.client) {
+          document.getElementById('companyName').value = result.client.name || '';
+        }
+
+        if (result.setupComplete) {
+          const printers = result.printers || [];
+
+          const names = document.querySelectorAll('.printer-name');
+          const ids = document.querySelectorAll('.printer-id');
+          const priorities = document.querySelectorAll('.printer-priority');
+          const defaults = document.querySelectorAll('.printer-default');
+          const actives = document.querySelectorAll('.printer-active');
+
+          printers.slice(0, 5).forEach((printer, i) => {
+            names[i].value = printer.printer_name || '';
+            ids[i].value = printer.printer_id || '';
+            priorities[i].value = String(printer.priority_order || i + 1);
+            defaults[i].value = printer.is_default ? 'true' : 'false';
+            actives[i].value = printer.is_active ? 'true' : 'false';
+          });
+
+          setReadOnlyMode();
+          showMessage('Setup already completed. Contact administrator for changes.', 'info');
+        } else {
+          showMessage('First-time setup is available.', 'info');
+        }
+      } catch (error) {
+        showMessage('Request failed while loading setup status.', 'error');
       }
     }
 
-    initPortal();
+    loadSetupStatus();
   </script>
 </body>
 </html>
