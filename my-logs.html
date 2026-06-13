@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Print Logs</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; background:#f7f7f7; color:#222; }
+    .container { max-width:1100px; margin:32px auto; background:#fff; padding:24px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+    .buttons { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    button { padding:10px 14px; border-radius:8px; border:0; cursor:pointer; }
+    .primary { background:#0f62fe; color:#fff; }
+    .secondary { background:#e5e5e5; color:#222; }
+    .box { background:#fafafa; border:1px solid #ddd; border-radius:10px; padding:14px; white-space:pre-wrap; font-family:Consolas, monospace; font-size:13px; min-height:320px; overflow:auto; }
+    .msg { margin-bottom:12px; padding:12px; border-radius:8px; display:none; }
+    .ok { background:#e8f5e9; color:#1b5e20; }
+    .err { background:#ffebee; color:#b71c1c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>My Print Logs</h1>
+    <div class="buttons">
+      <button class="primary" onclick="loadLogs()">Refresh Logs</button>
+      <button class="secondary" onclick="location.href='/client-portal'">Back to Portal</button>
+      <button class="secondary" onclick="logout()">Logout</button>
+    </div>
+    <div id="msg" class="msg"></div>
+    <div id="box" class="box">Loading logs...</div>
+  </div>
+  <script>
+    function show(text, ok) {
+      const el = document.getElementById('msg');
+      el.className = ok ? 'msg ok' : 'msg err';
+      el.style.display = 'block';
+      el.textContent = text;
+    }
+    async function loadLogs() {
+      const res = await fetch('/client/my-logs');
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Failed to load logs', false);
+      const lines = data.logs.map(x => x.message);
+      document.getElementById('box').textContent = lines.length ? lines.join('\n') : 'No logs yet';
+      show(`Loaded logs for ${data.client.name || data.client.email}`, true);
+    }
+    async function logout() {
+      await fetch('/client/logout', { method:'POST' });
+      location.href = '/login';
+    }
+    loadLogs();
+  </script>
+</body>
+</html>

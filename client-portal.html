@@ -3,64 +3,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Setup Portal</title>
+  <title>Client Portal</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; color: #222; }
-    .container { max-width: 1100px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-    h1, h2 { margin-top: 0; }
-    h2 { margin-top: 24px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    label { font-weight: bold; }
-    input, select, button {
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    button { cursor: pointer; border: 0; }
-    .primary { background: #0f62fe; color: white; }
-    .secondary { background: #e5e5e5; color: #222; }
-    .row { display: grid; grid-template-columns: 1.4fr 1fr 110px 130px 110px; gap: 10px; margin-bottom: 10px; }
-    .printer-head { font-weight: bold; margin-bottom: 8px; }
-    .buttons { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
-    .message { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
-    .success { background: #e8f5e9; color: #1b5e20; }
-    .error { background: #ffebee; color: #b71c1c; }
-    .info { background: #e3f2fd; color: #0d47a1; }
-    .note { margin-top: 16px; font-size: 14px; color: #555; }
-    .hidden { display: none !important; }
-    .readonly input,
-    .readonly select {
-      background: #f1f1f1;
-      pointer-events: none;
-    }
+    body { font-family: Arial, sans-serif; margin:0; background:#f7f7f7; color:#222; }
+    .container { max-width:1100px; margin:32px auto; background:#fff; padding:24px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+    h1, h2 { margin-top:0; }
+    h2 { margin-top:24px; border-bottom:1px solid #ddd; padding-bottom:8px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    label { font-weight:bold; }
+    input, select, button { padding:10px; border:1px solid #ccc; border-radius:8px; width:100%; box-sizing:border-box; }
+    button { cursor:pointer; border:0; }
+    .primary { background:#0f62fe; color:#fff; }
+    .secondary { background:#e5e5e5; color:#222; }
+    .danger { background:#d32f2f; color:#fff; }
+    .row { display:grid; grid-template-columns:1.4fr 1fr 110px 130px 110px; gap:10px; margin-bottom:10px; }
+    .printer-head { font-weight:bold; margin-bottom:8px; }
+    .buttons { margin-top:24px; display:flex; gap:12px; flex-wrap:wrap; }
+    .message { margin-top:16px; padding:12px; border-radius:8px; display:none; }
+    .success { background:#e8f5e9; color:#1b5e20; }
+    .error { background:#ffebee; color:#b71c1c; }
+    .info { background:#e3f2fd; color:#0d47a1; }
+    .readonly input, .readonly select { background:#f1f1f1; pointer-events:none; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Setup Portal</h1>
-
-    <div id="portalStatus" class="message info" style="display:block;">
-      Use this page with your setup link.
-    </div>
+    <h1>Client Portal</h1>
+    <div id="topMsg" class="message info" style="display:block;">Loading your account...</div>
 
     <div id="setupSection">
-      <h2>Initial Setup</h2>
-
+      <h2>Setup</h2>
       <div class="grid">
         <div class="field">
           <label>Company Name</label>
           <input id="companyName" type="text" placeholder="Enter company name" />
         </div>
-
         <div class="field">
           <label>Connection Code</label>
-          <input id="connectionCode" type="text" placeholder="Auto-filled from your setup link" />
+          <input id="connectionCode" type="text" readonly />
         </div>
-
-        <div class="field" style="grid-column: 1 / span 2;">
+        <div class="field" style="grid-column:1 / span 2;">
           <label>PrintNode API Key</label>
           <input id="printnodeApiKey" type="text" placeholder="Enter PrintNode API key" />
         </div>
@@ -68,12 +51,12 @@
 
       <div class="buttons">
         <button id="fetchPrintersBtn" class="secondary" onclick="fetchPrinters()">Fetch Printers</button>
-        <button id="completeSetupBtn" class="primary" onclick="saveSetup()">Complete Setup</button>
+        <button id="completeSetupBtn" class="primary" onclick="completeSetup()">Complete Setup</button>
         <button class="secondary" onclick="openLogs()">View Print History</button>
+        <button class="danger" onclick="logout()">Logout</button>
       </div>
 
       <h2>Printers (Up to 5)</h2>
-
       <div class="row printer-head">
         <div>Printer Name</div>
         <div>Printer ID</div>
@@ -81,127 +64,68 @@
         <div>Primary Printer</div>
         <div>Enabled</div>
       </div>
-
-      <div class="row">
-        <input class="printer-name" type="text" placeholder="Printer 1" />
-        <input class="printer-id" type="number" placeholder="Printer ID" />
-        <select class="printer-priority">
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-        </select>
-        <select class="printer-default">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-        <select class="printer-active">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <input class="printer-name" type="text" placeholder="Printer 2" />
-        <input class="printer-id" type="number" placeholder="Printer ID" />
-        <select class="printer-priority">
-          <option value="2">2</option>
-          <option value="1">1</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-        </select>
-        <select class="printer-default">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-        <select class="printer-active">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <input class="printer-name" type="text" placeholder="Printer 3" />
-        <input class="printer-id" type="number" placeholder="Printer ID" />
-        <select class="printer-priority">
-          <option value="3">3</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-        </select>
-        <select class="printer-default">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-        <select class="printer-active">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <input class="printer-name" type="text" placeholder="Printer 4" />
-        <input class="printer-id" type="number" placeholder="Printer ID" />
-        <select class="printer-priority">
-          <option value="4">4</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="5">5</option>
-        </select>
-        <select class="printer-default">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-        <select class="printer-active">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
-
-      <div class="row">
-        <input class="printer-name" type="text" placeholder="Printer 5" />
-        <input class="printer-id" type="number" placeholder="Printer ID" />
-        <select class="printer-priority">
-          <option value="5">5</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-        </select>
-        <select class="printer-default">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-        <select class="printer-active">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
+      <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="true">Yes</option><option value="false">No</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+      <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="2">2</option><option value="1">1</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+      <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="3">3</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+      <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="4">4</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+      <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="5">5</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
     </div>
 
-    <div id="messageBox" class="message"></div>
-
-    <div class="note">
-      After first successful setup, this page becomes read-only.
-      If changes are needed later, please contact administrator.
-    </div>
+    <div id="msg" class="message"></div>
   </div>
-
   <script>
-    function showMessage(text, type = 'success') {
-      const box = document.getElementById('messageBox');
-      box.className = `message ${type}`;
-      box.style.display = 'block';
-      box.textContent = text;
+    let portalState = { setup_completed: false };
+
+    function show(text, type = 'success') {
+      const el = document.getElementById('msg');
+      el.className = `message ${type}`;
+      el.style.display = 'block';
+      el.textContent = text;
     }
 
-    function getSecret() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('secret') || '';
+    function setTop(text, type = 'info') {
+      const el = document.getElementById('topMsg');
+      el.className = `message ${type}`;
+      el.style.display = 'block';
+      el.textContent = text;
+    }
+
+    function collectPrinters() {
+      const names = document.querySelectorAll('.printer-name');
+      const ids = document.querySelectorAll('.printer-id');
+      const priorities = document.querySelectorAll('.printer-priority');
+      const defaults = document.querySelectorAll('.printer-default');
+      const actives = document.querySelectorAll('.printer-active');
+      const printers = [];
+      for (let i = 0; i < names.length; i++) {
+        const printerIdValue = ids[i].value.trim();
+        if (!printerIdValue) continue;
+        printers.push({
+          printer_id: Number(printerIdValue),
+          printer_name: names[i].value.trim(),
+          priority_order: Number(priorities[i].value),
+          is_default: defaults[i].value === 'true',
+          is_active: actives[i].value === 'true'
+        });
+      }
+      return printers;
+    }
+
+    function fillPrinters(printers) {
+      const names = document.querySelectorAll('.printer-name');
+      const ids = document.querySelectorAll('.printer-id');
+      const priorities = document.querySelectorAll('.printer-priority');
+      const defaults = document.querySelectorAll('.printer-default');
+      const actives = document.querySelectorAll('.printer-active');
+      names.forEach(x => x.value = '');
+      ids.forEach(x => x.value = '');
+      printers.slice(0, 5).forEach((printer, i) => {
+        names[i].value = printer.printer_name || '';
+        ids[i].value = printer.printer_id || '';
+        priorities[i].value = String(printer.priority_order || i + 1);
+        defaults[i].value = printer.is_default ? 'true' : 'false';
+        actives[i].value = printer.is_active ? 'true' : 'false';
+      });
     }
 
     function setReadOnlyMode() {
@@ -212,189 +136,71 @@
       document.getElementById('completeSetupBtn').style.opacity = '0.6';
     }
 
-    function collectPrinters() {
-      const names = document.querySelectorAll('.printer-name');
-      const ids = document.querySelectorAll('.printer-id');
-      const priorities = document.querySelectorAll('.printer-priority');
-      const defaults = document.querySelectorAll('.printer-default');
-      const actives = document.querySelectorAll('.printer-active');
-      const printers = [];
-
-      for (let i = 0; i < names.length; i++) {
-        const printerIdValue = ids[i].value.trim();
-        const printerNameValue = names[i].value.trim();
-
-        if (!printerIdValue) continue;
-
-        printers.push({
-          printer_id: Number(printerIdValue),
-          printer_name: printerNameValue,
-          priority_order: Number(priorities[i].value),
-          is_default: defaults[i].value === 'true',
-          is_active: actives[i].value === 'true'
-        });
+    async function loadStatus() {
+      const res = await fetch('/client/setup-status');
+      const data = await res.json();
+      if (!data.ok) {
+        setTop(data.error || 'Failed to load account', 'error');
+        return;
       }
-
-      return printers;
+      portalState = data.client;
+      document.getElementById('companyName').value = data.client.name || '';
+      document.getElementById('connectionCode').value = data.client.webhook_secret || '';
+      fillPrinters(data.printers || []);
+      if (data.client.setup_completed) {
+        setReadOnlyMode();
+        setTop('Setup completed. If changes are needed, please contact administrator.', 'info');
+      } else {
+        setTop('Please complete first-time setup.', 'info');
+      }
     }
 
     async function fetchPrinters() {
-      const secret = getSecret();
-      const printnodeApiKey = document.getElementById('printnodeApiKey').value.trim();
-
-      if (!secret) {
-        showMessage('Connection code is missing in the page link.', 'error');
-        return;
-      }
-
-      if (!printnodeApiKey) {
-        showMessage('Enter PrintNode API Key first.', 'error');
-        return;
-      }
-
-      try {
-        const response = await fetch('/client/fetch-printers', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            secret: secret,
-            printnode_api_key: printnodeApiKey
-          })
-        });
-
-        const result = await response.json();
-
-        if (!result.ok) {
-          showMessage(result.error || 'Failed to fetch printers.', 'error');
-          return;
-        }
-
-        const names = document.querySelectorAll('.printer-name');
-        const ids = document.querySelectorAll('.printer-id');
-        const priorities = document.querySelectorAll('.printer-priority');
-        const defaults = document.querySelectorAll('.printer-default');
-        const actives = document.querySelectorAll('.printer-active');
-
-        names.forEach(x => x.value = '');
-        ids.forEach(x => x.value = '');
-
-        const printers = result.printers.slice(0, 5);
-
-        for (let i = 0; i < printers.length; i++) {
-          names[i].value = printers[i].printer_name || printers[i].computer_name || `Printer ${i + 1}`;
-          ids[i].value = printers[i].printer_id || '';
-          priorities[i].value = String(i + 1);
-          defaults[i].value = i === 0 ? 'true' : 'false';
-          actives[i].value = 'true';
-        }
-
-        showMessage(`Fetched ${printers.length} printer(s) successfully.`, 'success');
-      } catch (error) {
-        showMessage('Request failed while fetching printers.', 'error');
-      }
+      if (portalState.setup_completed) return;
+      const printnode_api_key = document.getElementById('printnodeApiKey').value.trim();
+      if (!printnode_api_key) return show('Enter PrintNode API Key first', 'error');
+      const res = await fetch('/client/fetch-printers', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ printnode_api_key })
+      });
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Failed to fetch printers', 'error');
+      const printers = data.printers.slice(0, 5).map((p, i) => ({
+        printer_id: p.printer_id,
+        printer_name: p.printer_name || p.computer_name || `Printer ${i+1}`,
+        priority_order: i + 1,
+        is_default: i === 0,
+        is_active: true
+      }));
+      fillPrinters(printers);
+      show(`Fetched ${printers.length} printer(s) successfully`, 'success');
     }
 
-    async function saveSetup() {
-      const secret = getSecret();
+    async function completeSetup() {
+      if (portalState.setup_completed) return;
       const name = document.getElementById('companyName').value.trim();
-      const printnodeApiKey = document.getElementById('printnodeApiKey').value.trim();
+      const printnode_api_key = document.getElementById('printnodeApiKey').value.trim();
       const printers = collectPrinters();
-
-      if (!secret) {
-        showMessage('Connection code is missing in the page link.', 'error');
-        return;
-      }
-
-      try {
-        const response = await fetch('/client/complete-setup', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            name: name,
-            secret: secret,
-            printnode_api_key: printnodeApiKey,
-            printers: printers
-          })
-        });
-
-        const result = await response.json();
-
-        if (!result.ok) {
-          showMessage(result.error || 'Setup failed.', 'error');
-          return;
-        }
-
-        showMessage('Setup completed successfully.', 'success');
-        setReadOnlyMode();
-      } catch (error) {
-        showMessage('Request failed while saving setup.', 'error');
-      }
+      const res = await fetch('/client/complete-setup', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name, printnode_api_key, printers })
+      });
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Setup failed', 'error');
+      show('Setup completed successfully', 'success');
+      portalState.setup_completed = true;
+      setReadOnlyMode();
+      await loadStatus();
     }
 
     function openLogs() {
-      const secret = getSecret();
-      if (!secret) {
-        showMessage('Connection code is missing in the page link.', 'error');
-        return;
-      }
-      window.location.href = `/client-logs?secret=${encodeURIComponent(secret)}`;
+      location.href = '/my-logs';
     }
 
-    async function loadSetupStatus() {
-      const secret = getSecret();
-
-      if (!secret) {
-        showMessage('Connection code is missing in the page link.', 'error');
-        return;
-      }
-
-      document.getElementById('connectionCode').value = secret;
-
-      try {
-        const response = await fetch(`/client/setup-status?secret=${encodeURIComponent(secret)}`);
-        const result = await response.json();
-
-        if (!result.ok) {
-          showMessage(result.error || 'Failed to load setup status.', 'error');
-          return;
-        }
-
-        if (result.exists && result.client) {
-          document.getElementById('companyName').value = result.client.name || '';
-        }
-
-        if (result.setupComplete) {
-          const printers = result.printers || [];
-
-          const names = document.querySelectorAll('.printer-name');
-          const ids = document.querySelectorAll('.printer-id');
-          const priorities = document.querySelectorAll('.printer-priority');
-          const defaults = document.querySelectorAll('.printer-default');
-          const actives = document.querySelectorAll('.printer-active');
-
-          printers.slice(0, 5).forEach((printer, i) => {
-            names[i].value = printer.printer_name || '';
-            ids[i].value = printer.printer_id || '';
-            priorities[i].value = String(printer.priority_order || i + 1);
-            defaults[i].value = printer.is_default ? 'true' : 'false';
-            actives[i].value = printer.is_active ? 'true' : 'false';
-          });
-
-          setReadOnlyMode();
-          showMessage('Setup already completed. Contact administrator for changes.', 'info');
-        } else {
-          showMessage('First-time setup is available.', 'info');
-        }
-      } catch (error) {
-        showMessage('Request failed while loading setup status.', 'error');
-      }
+    async function logout() {
+      await fetch('/client/logout', { method:'POST' });
+      location.href = '/login';
     }
 
-    loadSetupStatus();
+    loadStatus();
   </script>
 </body>
 </html>

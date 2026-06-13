@@ -3,161 +3,83 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Client Onboarding</title>
+  <title>Admin Client Editor</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f7f7f7; color: #222; }
-    .container { max-width: 1000px; margin: 32px auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
-    h1, h2 { margin-top: 0; }
-    h2 { margin-top: 24px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    label { font-weight: bold; }
-    input, select { padding: 10px; border: 1px solid #ccc; border-radius: 8px; width: 100%; box-sizing: border-box; }
-    .row { display: grid; grid-template-columns: 1.4fr 1fr 110px 110px 110px; gap: 10px; margin-bottom: 10px; }
-    .printer-head { font-weight: bold; margin-bottom: 8px; }
-    .buttons { margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap; }
-    button { padding: 12px 16px; border: 0; border-radius: 8px; cursor: pointer; }
-    .primary { background: #0f62fe; color: white; }
-    .secondary { background: #e5e5e5; color: #222; }
-    .danger { background: #d32f2f; color: white; }
-    .message { margin-top: 16px; padding: 12px; border-radius: 8px; display: none; }
-    .success { background: #e8f5e9; color: #1b5e20; }
-    .error { background: #ffebee; color: #b71c1c; }
-    .note { margin-top: 16px; font-size: 14px; color: #555; }
+    body { font-family: Arial, sans-serif; margin:0; background:#f7f7f7; color:#222; }
+    .container { max-width:1000px; margin:32px auto; background:#fff; padding:24px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+    h1,h2 { margin-top:0; }
+    h2 { margin-top:24px; border-bottom:1px solid #ddd; padding-bottom:8px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    label { font-weight:bold; }
+    input, select, button { padding:10px; border:1px solid #ccc; border-radius:8px; width:100%; box-sizing:border-box; }
+    button { cursor:pointer; border:0; }
+    .primary { background:#0f62fe; color:#fff; }
+    .secondary { background:#e5e5e5; color:#222; }
+    .row { display:grid; grid-template-columns:1.4fr 1fr 110px 110px 110px; gap:10px; margin-bottom:10px; }
+    .printer-head { font-weight:bold; }
+    .buttons { display:flex; gap:12px; flex-wrap:wrap; margin-top:24px; }
+    .msg { margin-top:12px; padding:12px; border-radius:8px; display:none; }
+    .ok { background:#e8f5e9; color:#1b5e20; }
+    .err { background:#ffebee; color:#b71c1c; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Client Onboarding / Edit</h1>
-
-    <h2>Admin Access</h2>
+    <h1>Admin Client Editor</h1>
     <div class="grid">
-      <div class="field">
-        <label>Admin Password</label>
-        <input id="adminPassword" type="password" placeholder="Enter admin password" />
-      </div>
-    </div>
-
-    <h2>Client Details</h2>
-    <div class="grid">
-      <div class="field">
-        <label>Client Name</label>
-        <input id="clientName" type="text" placeholder="Enter client name" />
-      </div>
-      <div class="field">
-        <label>Webhook Secret</label>
-        <input id="webhookSecret" type="text" placeholder="Enter webhook secret" />
-      </div>
-      <div class="field" style="grid-column: 1 / span 2;">
-        <label>PrintNode API Key</label>
-        <input id="printnodeApiKey" type="text" placeholder="Enter PrintNode API key" />
-      </div>
-      <div class="field">
-        <label>Active</label>
-        <select id="isActive">
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </div>
+      <div class="field"><label>Admin Password</label><input id="adminPassword" type="password" placeholder="Enter admin password" /></div>
+      <div class="field"><label>Email</label><input id="email" type="email" placeholder="Client email (one account per email)" /></div>
+      <div class="field"><label>Company Name</label><input id="name" type="text" placeholder="Company name" /></div>
+      <div class="field"><label>Connection Code</label><input id="webhookSecret" type="text" placeholder="Webhook secret / code" /></div>
+      <div class="field" style="grid-column:1 / span 2;"><label>PrintNode API Key</label><input id="printnodeApiKey" type="text" placeholder="PrintNode API key" /></div>
+      <div class="field"><label>Active</label><select id="isActive"><option value="true">Yes</option><option value="false">No</option></select></div>
+      <div class="field"><label>Setup Completed</label><select id="setupCompleted"><option value="true">Yes</option><option value="false">No</option></select></div>
     </div>
 
     <div class="buttons">
       <button class="secondary" onclick="fetchPrinters()">Fetch Printers</button>
-    </div>
-
-    <h2>Printers (Up to 5)</h2>
-    <div class="row printer-head">
-      <div>Printer Name</div>
-      <div>Printer ID</div>
-      <div>Priority</div>
-      <div>Default</div>
-      <div>Active</div>
-    </div>
-
-    <div class="row">
-      <input class="printer-name" type="text" placeholder="Printer 1" />
-      <input class="printer-id" type="number" placeholder="Printer ID" />
-      <select class="printer-priority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
-      <select class="printer-default"><option value="true">Yes</option><option value="false">No</option></select>
-      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
-    </div>
-    <div class="row">
-      <input class="printer-name" type="text" placeholder="Printer 2" />
-      <input class="printer-id" type="number" placeholder="Printer ID" />
-      <select class="printer-priority"><option value="2">2</option><option value="1">1</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select>
-      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
-      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
-    </div>
-    <div class="row">
-      <input class="printer-name" type="text" placeholder="Printer 3" />
-      <input class="printer-id" type="number" placeholder="Printer ID" />
-      <select class="printer-priority"><option value="3">3</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="5">5</option></select>
-      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
-      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
-    </div>
-    <div class="row">
-      <input class="printer-name" type="text" placeholder="Printer 4" />
-      <input class="printer-id" type="number" placeholder="Printer ID" />
-      <select class="printer-priority"><option value="4">4</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select>
-      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
-      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
-    </div>
-    <div class="row">
-      <input class="printer-name" type="text" placeholder="Printer 5" />
-      <input class="printer-id" type="number" placeholder="Printer ID" />
-      <select class="printer-priority"><option value="5">5</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
-      <select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select>
-      <select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select>
-    </div>
-
-    <div class="buttons">
       <button class="primary" onclick="saveClient()">Save Client</button>
-      <button class="secondary" onclick="clearForm()">Clear</button>
       <button class="secondary" onclick="goToClientsPage()">Open Clients List</button>
     </div>
 
-    <div id="messageBox" class="message"></div>
+    <h2>Printers (Up to 5)</h2>
+    <div class="row printer-head"><div>Printer Name</div><div>Printer ID</div><div>Priority</div><div>Default</div><div>Active</div></div>
+    <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="true">Yes</option><option value="false">No</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="2">2</option><option value="1">1</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="3">3</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="4">4</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="row"><input class="printer-name" type="text" /><input class="printer-id" type="number" /><select class="printer-priority"><option value="5">5</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select><select class="printer-default"><option value="false">No</option><option value="true">Yes</option></select><select class="printer-active"><option value="true">Yes</option><option value="false">No</option></select></div>
 
-    <div class="note">
-      Use this page for both new client onboarding and editing existing clients. If URL contains <b>?clientId=ID&admin=YOUR_PASSWORD</b>, the page auto-loads that client.
-    </div>
+    <div id="msg" class="msg"></div>
   </div>
-
   <script>
-    function showMessage(text, isSuccess) {
-      const box = document.getElementById('messageBox');
-      box.className = isSuccess ? 'message success' : 'message error';
-      box.style.display = 'block';
-      box.textContent = text;
+    function show(text, ok) {
+      const el = document.getElementById('msg');
+      el.className = ok ? 'msg ok' : 'msg err';
+      el.style.display = 'block';
+      el.textContent = text;
     }
-
     function getAdminPassword() {
-      const value = document.getElementById('adminPassword').value.trim();
-      if (value) return value;
-      const params = new URLSearchParams(window.location.search);
-      return params.get('admin') || '';
+      const p = new URLSearchParams(window.location.search).get('admin') || '';
+      return document.getElementById('adminPassword').value.trim() || p;
     }
-
     function getClientIdFromUrl() {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('clientId') || '';
+      return new URLSearchParams(window.location.search).get('clientId') || '';
     }
-
     function collectPrinters() {
       const names = document.querySelectorAll('.printer-name');
       const ids = document.querySelectorAll('.printer-id');
       const priorities = document.querySelectorAll('.printer-priority');
       const defaults = document.querySelectorAll('.printer-default');
       const actives = document.querySelectorAll('.printer-active');
-
       const printers = [];
       for (let i = 0; i < names.length; i++) {
         const printerIdValue = ids[i].value.trim();
-        const printerNameValue = names[i].value.trim();
         if (!printerIdValue) continue;
         printers.push({
           printer_id: Number(printerIdValue),
-          printer_name: printerNameValue,
+          printer_name: names[i].value.trim(),
           priority_order: Number(priorities[i].value),
           is_default: defaults[i].value === 'true',
           is_active: actives[i].value === 'true'
@@ -165,186 +87,93 @@
       }
       return printers;
     }
-
+    function fillPrinters(printers) {
+      const names = document.querySelectorAll('.printer-name');
+      const ids = document.querySelectorAll('.printer-id');
+      const priorities = document.querySelectorAll('.printer-priority');
+      const defaults = document.querySelectorAll('.printer-default');
+      const actives = document.querySelectorAll('.printer-active');
+      printers.slice(0,5).forEach((p, i) => {
+        names[i].value = p.printer_name || '';
+        ids[i].value = p.printer_id || '';
+        priorities[i].value = String(p.priority_order || i + 1);
+        defaults[i].value = p.is_default ? 'true' : 'false';
+        actives[i].value = p.is_active ? 'true' : 'false';
+      });
+    }
     async function fetchPrinters() {
-      const printnodeApiKey = document.getElementById('printnodeApiKey').value.trim();
       const admin = getAdminPassword();
-
-      if (!admin) {
-        showMessage('Enter admin password first', false);
-        return;
-      }
-      if (!printnodeApiKey) {
-        showMessage('Enter PrintNode API Key first', false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/admin/printnode/printers?admin=${encodeURIComponent(admin)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ printnode_api_key: printnodeApiKey })
-        });
-        const result = await response.json();
-        if (!result.ok) {
-          showMessage(result.error || 'Failed to fetch printers', false);
-          return;
-        }
-
-        const names = document.querySelectorAll('.printer-name');
-        const ids = document.querySelectorAll('.printer-id');
-        const priorities = document.querySelectorAll('.printer-priority');
-        const defaults = document.querySelectorAll('.printer-default');
-        const actives = document.querySelectorAll('.printer-active');
-
-        names.forEach(x => x.value = '');
-        ids.forEach(x => x.value = '');
-
-        const printers = result.printers.slice(0, 5);
-        for (let i = 0; i < printers.length; i++) {
-          names[i].value = printers[i].printer_name || printers[i].computer_name || `Printer ${i + 1}`;
-          ids[i].value = printers[i].printer_id || '';
-          priorities[i].value = String(i + 1);
-          defaults[i].value = i === 0 ? 'true' : 'false';
-          actives[i].value = 'true';
-        }
-
-        showMessage(`Fetched ${printers.length} printer(s) successfully`, true);
-      } catch (error) {
-        showMessage('Request failed while fetching printers', false);
-      }
+      const printnode_api_key = document.getElementById('printnodeApiKey').value.trim();
+      if (!admin) return show('Enter admin password first', false);
+      if (!printnode_api_key) return show('Enter PrintNode API Key first', false);
+      const res = await fetch(`/admin/printnode/printers?admin=${encodeURIComponent(admin)}`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ printnode_api_key })
+      });
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Failed to fetch printers', false);
+      const printers = data.printers.slice(0,5).map((p, i) => ({ printer_id:p.printer_id, printer_name:p.printer_name || p.computer_name || `Printer ${i+1}`, priority_order:i+1, is_default:i===0, is_active:true }));
+      fillPrinters(printers);
+      show(`Fetched ${printers.length} printer(s) successfully`, true);
     }
-
     async function loadExistingClient() {
-      const clientId = getClientIdFromUrl();
       const admin = getAdminPassword();
-
-      if (!clientId || !admin) return;
-
-      try {
-        const response = await fetch(`/admin/clients/${encodeURIComponent(clientId)}?admin=${encodeURIComponent(admin)}`);
-        const result = await response.json();
-        if (!result.ok) {
-          showMessage(result.error || 'Failed to load client', false);
-          return;
-        }
-
-        document.getElementById('clientName').value = result.client.name || '';
-        document.getElementById('webhookSecret').value = result.client.webhook_secret || '';
-        document.getElementById('printnodeApiKey').value = result.client.printnode_api_key || '';
-        document.getElementById('isActive').value = result.client.is_active ? 'true' : 'false';
-
-        const names = document.querySelectorAll('.printer-name');
-        const ids = document.querySelectorAll('.printer-id');
-        const priorities = document.querySelectorAll('.printer-priority');
-        const defaults = document.querySelectorAll('.printer-default');
-        const actives = document.querySelectorAll('.printer-active');
-
-        result.printers.slice(0, 5).forEach((printer, i) => {
-          names[i].value = printer.printer_name || '';
-          ids[i].value = printer.printer_id || '';
-          priorities[i].value = String(printer.priority_order || i + 1);
-          defaults[i].value = printer.is_default ? 'true' : 'false';
-          actives[i].value = printer.is_active ? 'true' : 'false';
-        });
-
-        showMessage('Client loaded for editing', true);
-      } catch (error) {
-        showMessage('Request failed while loading client', false);
-      }
+      const clientId = getClientIdFromUrl();
+      if (!admin || !clientId) return;
+      const res = await fetch(`/admin/clients/${encodeURIComponent(clientId)}?admin=${encodeURIComponent(admin)}`);
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Failed to load client', false);
+      document.getElementById('name').value = data.client.name || '';
+      document.getElementById('email').value = data.client.email || '';
+      document.getElementById('webhookSecret').value = data.client.webhook_secret || '';
+      document.getElementById('printnodeApiKey').value = data.client.printnode_api_key || '';
+      document.getElementById('isActive').value = data.client.is_active ? 'true' : 'false';
+      document.getElementById('setupCompleted').value = data.client.setup_completed ? 'true' : 'false';
+      fillPrinters(data.printers || []);
+      show('Client loaded for editing', true);
     }
-
     async function saveClient() {
       const admin = getAdminPassword();
-      if (!admin) {
-        showMessage('Enter admin password first', false);
-        return;
-      }
-
+      if (!admin) return show('Enter admin password first', false);
       const payload = {
-        name: document.getElementById('clientName').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim(),
         webhook_secret: document.getElementById('webhookSecret').value.trim(),
         printnode_api_key: document.getElementById('printnodeApiKey').value.trim(),
-        is_active: document.getElementById('isActive').value === 'true'
+        is_active: document.getElementById('isActive').value === 'true',
+        setup_completed: document.getElementById('setupCompleted').value === 'true'
       };
       const printers = collectPrinters();
       const clientId = getClientIdFromUrl();
-
-      try {
-        let clientResponse;
-        if (clientId) {
-          clientResponse = await fetch(`/admin/clients/${encodeURIComponent(clientId)}?admin=${encodeURIComponent(admin)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } else {
-          clientResponse = await fetch(`/admin/clients?admin=${encodeURIComponent(admin)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        }
-
-        const clientResult = await clientResponse.json();
-        if (!clientResult.ok) {
-          showMessage(clientResult.error || 'Client save failed', false);
-          return;
-        }
-
-        const savedClientId = clientResult.client.id;
-        const printersResponse = await fetch(`/admin/clients/${savedClientId}/printers?admin=${encodeURIComponent(admin)}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ printers })
-        });
-        const printersResult = await printersResponse.json();
-        if (!printersResult.ok) {
-          showMessage(printersResult.error || 'Printers save failed', false);
-          return;
-        }
-
-        showMessage('Client and printers saved successfully', true);
-        if (!clientId) {
-          const url = new URL(window.location.href);
-          url.searchParams.set('clientId', savedClientId);
-          url.searchParams.set('admin', admin);
-          window.history.replaceState({}, '', url.toString());
-        }
-      } catch (error) {
-        showMessage('Request failed', false);
+      let res;
+      if (clientId) {
+        res = await fetch(`/admin/clients/${encodeURIComponent(clientId)}?admin=${encodeURIComponent(admin)}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      } else {
+        res = await fetch(`/admin/clients?admin=${encodeURIComponent(admin)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      }
+      const data = await res.json();
+      if (!data.ok) return show(data.error || 'Client save failed', false);
+      const savedClientId = data.client.id;
+      if (printers.length) {
+        const pRes = await fetch(`/admin/clients/${savedClientId}/printers?admin=${encodeURIComponent(admin)}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ printers }) });
+        const pData = await pRes.json();
+        if (!pData.ok) return show(pData.error || 'Printers save failed', false);
+      }
+      show('Client and printers saved successfully', true);
+      if (!clientId) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('clientId', savedClientId);
+        url.searchParams.set('admin', admin);
+        history.replaceState({}, '', url.toString());
       }
     }
-
-    function clearForm() {
-      document.getElementById('clientName').value = '';
-      document.getElementById('webhookSecret').value = '';
-      document.getElementById('printnodeApiKey').value = '';
-      document.getElementById('isActive').value = 'true';
-      document.querySelectorAll('.printer-name').forEach(x => x.value = '');
-      document.querySelectorAll('.printer-id').forEach(x => x.value = '');
-      document.getElementById('messageBox').style.display = 'none';
-    }
-
     function goToClientsPage() {
       const admin = getAdminPassword();
-      if (!admin) {
-        showMessage('Enter admin password first', false);
-        return;
-      }
-      window.location.href = `/admin/clients/page?admin=${encodeURIComponent(admin)}`;
+      if (!admin) return show('Enter admin password first', false);
+      location.href = `/admin/clients/page?admin=${encodeURIComponent(admin)}`;
     }
-
-    function initPage() {
-      const params = new URLSearchParams(window.location.search);
-      const admin = params.get('admin') || '';
-      if (admin) {
-        document.getElementById('adminPassword').value = admin;
-      }
-      loadExistingClient();
-    }
-
-    initPage();
+    const admin = new URLSearchParams(location.search).get('admin') || '';
+    if (admin) document.getElementById('adminPassword').value = admin;
+    loadExistingClient();
   </script>
 </body>
 </html>
